@@ -1,16 +1,16 @@
 {
-  "name": "cordova-plugin-signal-strength",
-  "version": "1.0.3",
+  "name": "hrs-cordova-plugin-signal-strength",
+  "version": "1.0.4",
   "description": "Apache Cordova GSM Signal Strength Plugin",
   "cordova": {
-    "id": "cordova-plugin-signal-strength",
+    "id": "hrs-cordova-plugin-signal-strength",
     "platforms": [
       "android"
     ]
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/petervojtek/cordova-plugin-signal-strength"
+    "url": "https://github.com/healthrecoverysolutions/hrs-cordova-plugin-signal-strength"
   },
   "keywords": [
     "gsm",
@@ -26,10 +26,10 @@
       "version": ">=5.0.0"
     }
   ],
-  "author": "Peter Vojtek",
+  "author": "Health Recovery Solutions",
   "license": "Apache 2.0",
   "bugs": {
-    "url": "https://github.com/petervojtek/cordova-plugin-signal-strength/issues"
+    "url": "https://github.com/healthrecoverysolutions/hrs-cordova-plugin-signal-strength/issues"
   },
-  "homepage": "https://github.com/petervojtek/cordova-plugin-signal-strength"
+  "homepage": "https://github.com/healthrecoverysolutions/hrs-cordova-plugin-signal-strength"
 }
