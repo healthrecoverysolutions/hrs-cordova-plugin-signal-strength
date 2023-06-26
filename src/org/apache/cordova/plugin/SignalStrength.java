@@ -65,8 +65,10 @@ public class SignalStrength extends CordovaPlugin {
                     }
                 }
             }
-            String strength = "dbm(" + dbm + ") level(" + level + ")";
-            callbackContext.success(strength);
+            JSONObject networkInfo = new JSONObject();
+            networkInfo.put("dbm", dbm);
+            networkInfo.put("level", level);
+            callbackContext.success(networkInfo);
             return true;
         }
 
