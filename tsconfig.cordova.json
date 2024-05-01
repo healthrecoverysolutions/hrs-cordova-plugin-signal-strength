@@ -1,0 +1,24 @@
+{
+	"compilerOptions": {
+		"target": "ES5",
+		"module": "CommonJS",
+		"outDir": "www/",
+		"typeRoots": ["node_modules/@types"],
+		"types": ["cordova"],
+		"lib": ["ES5", "DOM", "ES2015"],
+		"declaration": false,
+		"strict": true,
+		"noUnusedLocals": true,
+		"noUnusedParameters": true,
+		"noImplicitReturns": true,
+		"moduleResolution": "node"
+	},
+	"compileOnSave": true,
+	"include": [
+        "src/ts/cordova-plugin-signal-strength.ts"
+    ],
+	"exclude": [
+        "node_modules",
+        "tests/*.ts"
+    ]
+}

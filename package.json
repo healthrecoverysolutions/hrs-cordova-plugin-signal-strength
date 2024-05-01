@@ -2,6 +2,21 @@
   "name": "hrs-cordova-plugin-signal-strength",
   "version": "1.0.4",
   "description": "Apache Cordova GSM Signal Strength Plugin",
+  "main": "./lib/index.js",
+  "module": "./lib/index.js",
+  "types": "./lib/index.d.ts",
+  "scripts": {
+    "build:clean": "rm -rf ./www/* ./lib/*",
+    "build:cordova": "tsc -p tsconfig.cordova.json",
+    "build:es6": "tsc -p tsconfig.es6.json",
+    "build": "run-s build:clean build:cordova build:es6",
+    "version": "run-s build version:sync",
+    "version:sync": "node ./scripts/version-sync.js",
+    "version:patch": "npm version patch",
+    "git:publish": "node ./scripts/version-publish.js",
+    "version:publish": "run-s git:publish",
+    "bump": "run-s version:patch version:publish"
+  },
   "cordova": {
     "id": "hrs-cordova-plugin-signal-strength",
     "platforms": [
@@ -10,7 +25,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/healthrecoverysolutions/hrs-cordova-plugin-signal-strength"
+    "url": "git+https://github.com/healthrecoverysolutions/hrs-cordova-plugin-signal-strength.git"
   },
   "keywords": [
     "gsm",
@@ -20,16 +35,16 @@
     "ecosystem:cordova",
     "cordova-android"
   ],
-  "engines": [
-    {
-      "name": "cordova",
-      "version": ">=5.0.0"
-    }
-  ],
   "author": "Health Recovery Solutions",
   "license": "Apache 2.0",
   "bugs": {
     "url": "https://github.com/healthrecoverysolutions/hrs-cordova-plugin-signal-strength/issues"
   },
-  "homepage": "https://github.com/healthrecoverysolutions/hrs-cordova-plugin-signal-strength"
+  "homepage": "https://github.com/healthrecoverysolutions/hrs-cordova-plugin-signal-strength",
+  "devDependencies": {
+    "@types/cordova": "11.0.3",
+    "@types/node": "20.12.8",
+    "npm-run-all": "4.1.5",
+    "typescript": "5.4.5"
+  }
 }
