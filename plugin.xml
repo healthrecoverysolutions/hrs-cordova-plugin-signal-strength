@@ -14,5 +14,6 @@
       </feature>
     </config-file>
     <source-file src="src/android/SignalStrength.java" target-dir="src/com/hrs/signalstrength/SignalStrength" />
+    <framework src="com.jakewharton.timber:timber:5.0.1" />
   </platform>
 </plugin>

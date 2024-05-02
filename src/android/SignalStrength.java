@@ -1,4 +1,4 @@
-package org.apache.cordova.plugin;
+package com.hrs.signalstrength;
 
 import android.content.Context;
 import java.util.*;
@@ -24,6 +24,8 @@ import org.apache.cordova.LOG;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
+
+import timber.log.Timber;
 
 public class SignalStrength extends CordovaPlugin {
     private static final String TAG = "SignalStrengthPlugin";
