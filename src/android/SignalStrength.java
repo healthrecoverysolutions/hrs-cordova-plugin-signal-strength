@@ -85,21 +85,28 @@ public class SignalStrength extends CordovaPlugin {
     }
 
     private void getCellInfo(CallbackContext callbackContext) throws JSONException {
+        Timber.v("getCellInfo()");
 
-        //This will give info of all sims present inside your mobile
         if (ActivityCompat.checkSelfPermission(
             cordova.getContext(),
             Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-            callbackContext.error("ACCESS_FINE_LOCATION permission not granted");
+            String errorMessage = "ACCESS_FINE_LOCATION permission not granted";
+            Timber.w(errorMessage);
+            callbackContext.error(errorMessage);
             return;
         }
 
+        // This will give info of all sims present inside your mobile
         List<CellInfo> infoList = telephonyManager.getAllCellInfo();
 
         if (infoList == null) {
-            callbackContext.error("failed to get cell info list");
+            String errorMessage = "failed to get cell info list";
+            Timber.w(errorMessage);
+            callbackContext.error(errorMessage);
             return;
         }
+
+        Timber.v("getCellInfo() checking %s instances", infoList.size());
 
         JSONObject result = null;
         ArrayList<JSONObject> altPrimaryInfoList = new ArrayList<>();

@@ -1,3 +1,5 @@
+type SuccessCallback<TValue> = (value: TValue) => void;
+type ErrorCallback = (error: any) => void;
 /**
  * Translates to known subclasses of CellInfo:
  * https://developer.android.com/reference/android/telephony/CellInfo
@@ -49,13 +51,15 @@ export interface CellInfoWithAlternates extends CellInfo {
 }
 export declare class SignalStrengthCordovaInterface {
     constructor();
-    /**
-     * @deprecated use getCellInfo() instead
-     */
-    dbm(): Promise<CellInfoWithAlternates>;
     getCellInfo(): Promise<CellInfoWithAlternates>;
 }
 /**
  * Singleton reference to interact with this cordova plugin
  */
 export declare const SignalStrength: SignalStrengthCordovaInterface;
+/**
+ * Provided for backwards compatibility - this will be removed in a future release.
+ * @deprecated use `SignalStrength.getCellInfo()` instead
+ */
+export declare function dbm(successCallback: SuccessCallback<CellInfoWithAlternates>, errorCallback: ErrorCallback): void;
+export {};

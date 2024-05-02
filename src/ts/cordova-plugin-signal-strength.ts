@@ -99,13 +99,6 @@ export class SignalStrengthCordovaInterface {
     constructor() {
     }
 
-    /**
-     * @deprecated use getCellInfo() instead
-     */
-    public dbm(): Promise<CellInfoWithAlternates> {
-        return invoke('dbm');
-    }
-
     public getCellInfo(): Promise<CellInfoWithAlternates> {
         return invoke('getCellInfo');
     }
@@ -115,3 +108,11 @@ export class SignalStrengthCordovaInterface {
  * Singleton reference to interact with this cordova plugin
  */
 export const SignalStrength = new SignalStrengthCordovaInterface();
+
+/**
+ * Provided for backwards compatibility - this will be removed in a future release.
+ * @deprecated use `SignalStrength.getCellInfo()` instead
+ */
+export function dbm(successCallback: SuccessCallback<CellInfoWithAlternates>, errorCallback: ErrorCallback): void {
+    cordovaExec<CellInfoWithAlternates>(PLUGIN_NAME, 'dbm', successCallback, errorCallback, []);
+}

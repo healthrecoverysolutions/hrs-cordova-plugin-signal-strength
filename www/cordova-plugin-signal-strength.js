@@ -3,7 +3,7 @@
 // Generic Cordova Utilities
 ////////////////////////////////////////////////////////////////
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.SignalStrength = exports.SignalStrengthCordovaInterface = exports.CellConnectionStatus = exports.CellInfoType = void 0;
+exports.dbm = exports.SignalStrength = exports.SignalStrengthCordovaInterface = exports.CellConnectionStatus = exports.CellInfoType = void 0;
 function noop() {
     return;
 }
@@ -62,12 +62,6 @@ var CellConnectionStatus;
 var SignalStrengthCordovaInterface = /** @class */ (function () {
     function SignalStrengthCordovaInterface() {
     }
-    /**
-     * @deprecated use getCellInfo() instead
-     */
-    SignalStrengthCordovaInterface.prototype.dbm = function () {
-        return invoke('dbm');
-    };
     SignalStrengthCordovaInterface.prototype.getCellInfo = function () {
         return invoke('getCellInfo');
     };
@@ -78,3 +72,11 @@ exports.SignalStrengthCordovaInterface = SignalStrengthCordovaInterface;
  * Singleton reference to interact with this cordova plugin
  */
 exports.SignalStrength = new SignalStrengthCordovaInterface();
+/**
+ * Provided for backwards compatibility - this will be removed in a future release.
+ * @deprecated use `SignalStrength.getCellInfo()` instead
+ */
+function dbm(successCallback, errorCallback) {
+    cordovaExec(PLUGIN_NAME, 'dbm', successCallback, errorCallback, []);
+}
+exports.dbm = dbm;
