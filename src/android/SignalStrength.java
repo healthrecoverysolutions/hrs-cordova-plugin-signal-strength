@@ -45,6 +45,7 @@ public class SignalStrength extends CordovaPlugin {
     private static final String KEY_LEVEL = "level";
     private static final String KEY_CELL_TYPE = "cellType";
     private static final String KEY_CELL_DATA_LOADED = "cellDataLoaded";
+    private static final String KEY_HAS_REGISTERED_CELL_PROVIDER = "hasRegisteredCellProvider";
     private static final String KEY_ALTERNATE_PRIMARY = "alternatePrimary";
     private static final String KEY_SECONDARY = "secondary";
     private static final String KEY_CONNECTION_STATUS = "connectionStatus";
@@ -115,7 +116,7 @@ public class SignalStrength extends CordovaPlugin {
                     case CellInfo.CONNECTION_PRIMARY_SERVING:
                         if (result == null) {
                             // keep the first "primary" we find as the root object
-                            result = getCellInfoJson(info);
+                            result = getPrimaryCellInfoJson(info);
                         } else {
                             altPrimaryInfoList.add(getCellInfoJson(info));
                         }
@@ -129,20 +130,29 @@ public class SignalStrength extends CordovaPlugin {
                 }
             } else if (result == null) {
                 // keep the first "primary" we find as the root object
-                result = getCellInfoJson(info);
+                result = getPrimaryCellInfoJson(info);
             } else {
                 secondaryInfoList.add(getCellInfoJson(info));
             }
         }
 
         if (result == null) {
-            result = new JSONObject().put(KEY_CELL_DATA_LOADED, false);
+            result = new JSONObject();
+            result.put(KEY_HAS_REGISTERED_CELL_PROVIDER, false);
         } else {
+            // if result is not null, we found at least one registered provider,
+            // so add any alternate providers as sub-arrays.
             result.put(KEY_ALTERNATE_PRIMARY, altPrimaryInfoList);
             result.put(KEY_SECONDARY, secondaryInfoList);
         }
 
         callbackContext.success(result);
+    }
+
+    private JSONObject getPrimaryCellInfoJson(CellInfo info) throws JSONException {
+        JSONObject result = getCellInfoJson(info);
+        result.put(KEY_HAS_REGISTERED_CELL_PROVIDER, true);
+        return result;
     }
 
     private JSONObject getCellInfoJson(CellInfo info) throws JSONException {

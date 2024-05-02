@@ -32,6 +32,10 @@ export interface CellInfo {
 }
 export interface CellInfoWithAlternates extends CellInfo {
     /**
+     * True if at least one registered cell provider was found.
+     */
+    hasRegisteredCellProvider: boolean;
+    /**
      * Any CellInfo instances past the first found "primary"
      * that also report themselves as primary (see CellConnectionStatus)
      */
