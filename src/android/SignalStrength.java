@@ -80,11 +80,24 @@ public class SignalStrength extends CordovaPlugin {
     /**
      * @deprecated use getCellInfo() instead
      */
-    private void getDbm(CallbackContext callbackContext) throws JSONException {
+    private void getDbm(CallbackContext callbackContext) {
         getCellInfo(callbackContext);
     }
 
-    private void getCellInfo(CallbackContext callbackContext) throws JSONException {
+    private void getCellInfo(CallbackContext callbackContext) {
+        cordova.getThreadPool().execute(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    getCellInfoSync(callbackContext);
+                } catch (JSONException e) {
+                    Timber.e(e);
+                }
+            }
+        });
+    }
+
+    private void getCellInfoSync(CallbackContext callbackContext) throws JSONException {
         Timber.v("getCellInfo()");
 
         if (ActivityCompat.checkSelfPermission(
