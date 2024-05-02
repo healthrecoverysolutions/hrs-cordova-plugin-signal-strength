@@ -1,12 +1,15 @@
 package com.hrs.signalstrength;
 
+import android.Manifest;
 import android.content.Context;
-import java.util.*;
 
-import android.telephony.PhoneStateListener;
+import android.content.pm.PackageManager;
+import android.os.Build;
+import android.telephony.CellInfoNr;
+import android.telephony.CellInfoTdscdma;
+import android.telephony.CellSignalStrength;
 import android.telephony.TelephonyManager;
 
-import android.telephony.CellSignalStrength;
 import android.telephony.CellSignalStrengthGsm;
 import android.telephony.CellSignalStrengthCdma;
 import android.telephony.CellSignalStrengthLte;
@@ -18,66 +21,193 @@ import android.telephony.CellInfoCdma;
 import android.telephony.CellInfoWcdma;
 import android.telephony.CellInfoGsm;
 
+import androidx.core.app.ActivityCompat;
+
 import org.apache.cordova.CordovaPlugin;
 import org.apache.cordova.CallbackContext;
-import org.apache.cordova.LOG;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import timber.log.Timber;
 
 public class SignalStrength extends CordovaPlugin {
-    private static final String TAG = "SignalStrengthPlugin";
+    /**
+     * @deprecated use ACTION_GET_CELL_INFO instead
+     */
+    private static final String ACTION_DBM = "dbm";
+    private static final String ACTION_GET_CELL_INFO = "getCellInfo";
+
+    private static final String KEY_DBM = "dbm";
+    private static final String KEY_LEVEL = "level";
+    private static final String KEY_CELL_TYPE = "cellType";
+    private static final String KEY_CELL_DATA_LOADED = "cellDataLoaded";
+    private static final String KEY_ALTERNATE_PRIMARY = "alternatePrimary";
+    private static final String KEY_SECONDARY = "secondary";
+    private static final String KEY_CONNECTION_STATUS = "connectionStatus";
+
+    private static final String CELL_TYPE_UNKNOWN = "UNKNOWN";
+
+    private TelephonyManager telephonyManager;
+
+    @Override
+    protected void pluginInitialize() {
+        super.pluginInitialize();
+        telephonyManager = (TelephonyManager) cordova.getActivity().getSystemService(Context.TELEPHONY_SERVICE);
+    }
 
     @Override
     public boolean execute(String action, JSONArray args, CallbackContext callbackContext) throws JSONException {
-
-        if (action.equals("dbm")) {
-            TelephonyManager tm = (TelephonyManager) cordova.getActivity().getSystemService(Context.TELEPHONY_SERVICE);
-            List<CellInfo> cellInfos = tm.getAllCellInfo();   //This will give info of all sims present inside your mobile
-            if(cellInfos != null) {
-                for (int i = 0 ; i < cellInfos.size() ; i++) {
-                    if (cellInfos.get(i).isRegistered()) {
-                        if (cellInfos.get(i) instanceof CellInfoWcdma) {
-                            CellInfoWcdma cellInfoWcdma = (CellInfoWcdma) cellInfos.get(i);
-                            CellSignalStrengthWcdma cellSignalStrengthWcdma = cellInfoWcdma.getCellSignalStrength();
-                            dbm = cellSignalStrengthWcdma.getDbm();
-                            level = cellSignalStrengthWcdma.getLevel();
-                            LOG.d(TAG, "WCDMA dbm(" + dbm + ") level(" + level + ")");
-                        } else if (cellInfos.get(i) instanceof CellInfoGsm) {
-                            CellInfoGsm cellInfogsm = (CellInfoGsm) cellInfos.get(i);
-                            CellSignalStrengthGsm cellSignalStrengthGsm = cellInfogsm.getCellSignalStrength();
-                            dbm = cellSignalStrengthGsm.getDbm();
-                            level = cellSignalStrengthGsm.getLevel();
-                            LOG.d(TAG, "GSM dbm(" + dbm + ") level(" + level + ")");
-                        } else if (cellInfos.get(i) instanceof CellInfoLte) {
-                            CellInfoLte cellInfoLte = (CellInfoLte) cellInfos.get(i);
-                            CellSignalStrengthLte cellSignalStrengthLte = cellInfoLte.getCellSignalStrength();
-                            dbm = cellSignalStrengthLte.getDbm();
-                            level = cellSignalStrengthLte.getLevel();
-                            LOG.d(TAG, "LTE dbm(" + dbm + ") level(" + level + ")");
-                        } else if (cellInfos.get(i) instanceof CellInfoCdma) {
-                            CellInfoCdma cellInfoCdma = (CellInfoCdma) cellInfos.get(i);
-                            CellSignalStrengthCdma cellSignalStrengthCdma = cellInfoCdma.getCellSignalStrength();
-                            dbm = cellSignalStrengthCdma.getDbm();
-                            level = cellSignalStrengthCdma.getLevel();
-                            LOG.d(TAG, "CDMA dbm(" + dbm + ") level(" + level + ")");
-                        }
-                    }
-                }
-            }
-            JSONObject networkInfo = new JSONObject();
-            networkInfo.put("dbm", dbm);
-            networkInfo.put("level", level);
-            callbackContext.success(networkInfo);
-            return true;
+        Timber.v("execute action %s", action);
+        switch (action) {
+            // included for backward compatibility, but will be removed in a future plugin version
+            case ACTION_DBM:
+                getDbm(callbackContext);
+                break;
+            case ACTION_GET_CELL_INFO:
+                getCellInfo(callbackContext);
+                break;
+            default:
+                return false;
         }
-
-        return false;
+        return true;
     }
 
-    int dbm = -1;
-    int level = 0;
-}
+    /**
+     * @deprecated use getCellInfo() instead
+     */
+    private void getDbm(CallbackContext callbackContext) throws JSONException {
+        getCellInfo(callbackContext);
+    }
 
+    private void getCellInfo(CallbackContext callbackContext) throws JSONException {
+
+        //This will give info of all sims present inside your mobile
+        if (ActivityCompat.checkSelfPermission(
+            cordova.getContext(),
+            Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            callbackContext.error("ACCESS_FINE_LOCATION permission not granted");
+            return;
+        }
+
+        List<CellInfo> infoList = telephonyManager.getAllCellInfo();
+
+        if (infoList == null) {
+            callbackContext.error("failed to get cell info list");
+            return;
+        }
+
+        JSONObject result = null;
+        ArrayList<JSONObject> altPrimaryInfoList = new ArrayList<>();
+        ArrayList<JSONObject> secondaryInfoList = new ArrayList<>();
+
+        for (CellInfo info : infoList) {
+            if (info == null || !info.isRegistered()) {
+                continue;
+            }
+
+            if (Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+                int status = info.getCellConnectionStatus();
+                switch (status) {
+                    case CellInfo.CONNECTION_PRIMARY_SERVING:
+                        if (result == null) {
+                            // keep the first "primary" we find as the root object
+                            result = getCellInfoJson(info);
+                        } else {
+                            altPrimaryInfoList.add(getCellInfoJson(info));
+                        }
+                        break;
+                    case CellInfo.CONNECTION_SECONDARY_SERVING:
+                    case CellInfo.CONNECTION_NONE:
+                    case CellInfo.CONNECTION_UNKNOWN:
+                    default:
+                        secondaryInfoList.add(getCellInfoJson(info));
+                        break;
+                }
+            } else if (result == null) {
+                // keep the first "primary" we find as the root object
+                result = getCellInfoJson(info);
+            } else {
+                secondaryInfoList.add(getCellInfoJson(info));
+            }
+        }
+
+        if (result == null) {
+            result = new JSONObject().put(KEY_CELL_DATA_LOADED, false);
+        } else {
+            result.put(KEY_ALTERNATE_PRIMARY, altPrimaryInfoList);
+            result.put(KEY_SECONDARY, secondaryInfoList);
+        }
+
+        callbackContext.success(result);
+    }
+
+    private JSONObject getCellInfoJson(CellInfo info) throws JSONException {
+        JSONObject result = new JSONObject();
+        String cellType = CELL_TYPE_UNKNOWN;
+        boolean loaded = false;
+        int dbm = 0;
+        int level = 0;
+
+        if (info != null) {
+            cellType = info.getClass().getSimpleName();
+        }
+
+        // Unfortunately, we need to switch over these manually instead of
+        // using getCellSignalStrength() so we can support android versions lower than 30.
+        if (info instanceof CellInfoCdma) {
+            CellInfoCdma cellInfoCdma = (CellInfoCdma) info;
+            CellSignalStrengthCdma cellSignalStrengthCdma = cellInfoCdma.getCellSignalStrength();
+            dbm = cellSignalStrengthCdma.getDbm();
+            level = cellSignalStrengthCdma.getLevel();
+            loaded = true;
+        } else if (info instanceof CellInfoGsm) {
+            CellInfoGsm cellInfogsm = (CellInfoGsm) info;
+            CellSignalStrengthGsm cellSignalStrengthGsm = cellInfogsm.getCellSignalStrength();
+            dbm = cellSignalStrengthGsm.getDbm();
+            level = cellSignalStrengthGsm.getLevel();
+            loaded = true;
+        } else if (info instanceof CellInfoLte) {
+            CellInfoLte cellInfoLte = (CellInfoLte) info;
+            CellSignalStrengthLte cellSignalStrengthLte = cellInfoLte.getCellSignalStrength();
+            dbm = cellSignalStrengthLte.getDbm();
+            level = cellSignalStrengthLte.getLevel();
+            loaded = true;
+        } else if (info instanceof CellInfoWcdma) {
+            CellInfoWcdma cellInfoWcdma = (CellInfoWcdma) info;
+            CellSignalStrengthWcdma cellSignalStrengthWcdma = cellInfoWcdma.getCellSignalStrength();
+            dbm = cellSignalStrengthWcdma.getDbm();
+            level = cellSignalStrengthWcdma.getLevel();
+            loaded = true;
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            if (info instanceof CellInfoNr) {
+                CellInfoNr cellInfoNr = (CellInfoNr) info;
+                CellSignalStrength cellSignalStrengthNr = cellInfoNr.getCellSignalStrength();
+                dbm = cellSignalStrengthNr.getDbm();
+                level = cellSignalStrengthNr.getLevel();
+                loaded = true;
+            } else if (info instanceof CellInfoTdscdma) {
+                CellInfoTdscdma cellInfoTdscdma = (CellInfoTdscdma) info;
+                CellSignalStrength cellSignalStrengthTdscdma = cellInfoTdscdma.getCellSignalStrength();
+                dbm = cellSignalStrengthTdscdma.getDbm();
+                level = cellSignalStrengthTdscdma.getLevel();
+                loaded = true;
+            }
+        }
+
+        Timber.d("getCellInfoJson() result = %s dbm(%s) level(%s)", cellType, dbm, level);
+        result.put(KEY_CELL_TYPE, cellType);
+        result.put(KEY_DBM, dbm);
+        result.put(KEY_LEVEL, level);
+        result.put(KEY_CELL_DATA_LOADED, loaded);
+
+        if (info != null && Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+            result.put(KEY_CONNECTION_STATUS, info.getCellConnectionStatus());
+        }
+
+        return result;
+    }
+}
