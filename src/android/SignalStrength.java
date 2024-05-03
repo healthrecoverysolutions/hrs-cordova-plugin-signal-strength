@@ -117,7 +117,7 @@ public class SignalStrength extends CordovaPlugin {
             return;
         }
 
-        Timber.v("getCellInfo() checking %s instances", infoList.size());
+        Timber.v("getCellInfo() checking %s instance(s)", infoList.size());
 
         JSONObject primary = null;
         ArrayList<JSONObject> alternates = new ArrayList<>();
