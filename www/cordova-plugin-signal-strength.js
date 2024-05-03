@@ -65,6 +65,9 @@ var SignalStrengthCordovaInterface = /** @class */ (function () {
     SignalStrengthCordovaInterface.prototype.getCellInfo = function () {
         return invoke('getCellInfo');
     };
+    SignalStrengthCordovaInterface.prototype.getWifiInfo = function () {
+        return invoke('getWifiInfo');
+    };
     return SignalStrengthCordovaInterface;
 }());
 exports.SignalStrengthCordovaInterface = SignalStrengthCordovaInterface;

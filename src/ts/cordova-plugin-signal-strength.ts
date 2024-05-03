@@ -89,6 +89,21 @@ export interface CellInfoWithAlternates extends CellInfo {
     alternates: CellInfo[];
 }
 
+export interface WifiInfo {
+    ssid: string;
+    bssid: string;
+    networkId: number;
+    rssi: number;
+    linkSpeedMbps: number;
+    // Below options only supported on Android 11 (API 30) and above
+    level?: number;
+    maxLevel?: number;
+    txLinkSpeedMbps?: number;
+    maxTxLinkSpeedMbps?: number;
+    rxLinkSpeedMbps?: number;
+    maxRxLinkSpeedMbps?: number;
+}
+
 export class SignalStrengthCordovaInterface {
 
     constructor() {
@@ -96,6 +111,10 @@ export class SignalStrengthCordovaInterface {
 
     public getCellInfo(): Promise<CellInfoWithAlternates> {
         return invoke('getCellInfo');
+    }
+
+    public getWifiInfo(): Promise<WifiInfo> {
+        return invoke('getWifiInfo');
     }
 }
 

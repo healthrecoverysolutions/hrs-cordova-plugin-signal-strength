@@ -44,9 +44,23 @@ export interface CellInfoWithAlternates extends CellInfo {
      */
     alternates: CellInfo[];
 }
+export interface WifiInfo {
+    ssid: string;
+    bssid: string;
+    networkId: number;
+    rssi: number;
+    linkSpeedMbps: number;
+    level?: number;
+    maxLevel?: number;
+    txLinkSpeedMbps?: number;
+    maxTxLinkSpeedMbps?: number;
+    rxLinkSpeedMbps?: number;
+    maxRxLinkSpeedMbps?: number;
+}
 export declare class SignalStrengthCordovaInterface {
     constructor();
     getCellInfo(): Promise<CellInfoWithAlternates>;
+    getWifiInfo(): Promise<WifiInfo>;
 }
 /**
  * Singleton reference to interact with this cordova plugin

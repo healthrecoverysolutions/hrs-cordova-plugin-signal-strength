@@ -1,9 +1,16 @@
 package com.hrs.signalstrength;
 
 import android.Manifest;
+import android.app.Activity;
 import android.content.Context;
 
 import android.content.pm.PackageManager;
+import android.net.ConnectivityManager;
+import android.net.Network;
+import android.net.NetworkCapabilities;
+import android.net.NetworkRequest;
+import android.net.wifi.WifiInfo;
+import android.net.wifi.WifiManager;
 import android.os.Build;
 import android.telephony.CellInfoNr;
 import android.telephony.CellInfoTdscdma;
@@ -21,6 +28,8 @@ import android.telephony.CellInfoCdma;
 import android.telephony.CellInfoWcdma;
 import android.telephony.CellInfoGsm;
 
+import androidx.annotation.NonNull;
+import androidx.annotation.RequiresApi;
 import androidx.core.app.ActivityCompat;
 
 import org.apache.cordova.CordovaPlugin;
@@ -36,28 +45,80 @@ import timber.log.Timber;
 
 public class SignalStrength extends CordovaPlugin {
     /**
-     * // included for backward compatibility; will be removed in a future plugin version
+     * included for backward compatibility; will be removed in a future plugin version
      * @deprecated use ACTION_GET_CELL_INFO instead
      */
     private static final String ACTION_DBM = "dbm";
     private static final String ACTION_GET_CELL_INFO = "getCellInfo";
+    private static final String ACTION_GET_WIFI_INFO = "getWifiInfo";
 
     private static final String KEY_DBM = "dbm";
+    private static final String KEY_RSSI = "rssi";
     private static final String KEY_LEVEL = "level";
+    private static final String KEY_MAX_LEVEL = "maxLevel";
     private static final String KEY_CELL_TYPE = "cellType";
     private static final String KEY_CELL_DATA_LOADED = "cellDataLoaded";
     private static final String KEY_PRIMARY = "primary";
     private static final String KEY_ALTERNATES = "alternates";
     private static final String KEY_CONNECTION_STATUS = "connectionStatus";
+    private static final String KEY_SSID = "ssid";
+    private static final String KEY_BSSID = "bssid";
+    private static final String KEY_NETWORK_ID = "networkId";
+    private static final String KEY_LINK_SPEED_MBPS = "linkSpeedMbps";
+    private static final String KEY_TX_LINK_SPEED_MBPS = "txLinkSpeedMbps";
+    private static final String KEY_MAX_TX_LINK_SPEED_MBPS = "maxTxLinkSpeedMbps";
+    private static final String KEY_RX_LINK_SPEED_MBPS = "rxLinkSpeedMbps";
+    private static final String KEY_MAX_RX_LINK_SPEED_MBPS = "maxRxLinkSpeedMbps";
 
     private static final String CELL_TYPE_UNKNOWN = "UNKNOWN";
 
-    private TelephonyManager telephonyManager;
+    private TelephonyManager telephonyManager = null;
+    private WifiManager wifiManager = null;
+    private ConnectivityManager connectivityManager = null;
+    private CallbackContext networkInfoCallback = null;
+
+    private final NetworkRequest networkRequest = new NetworkRequest.Builder()
+        .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
+        .build();
+
+    private final ConnectivityManager.NetworkCallback networkCallback = new ConnectivityManager.NetworkCallback() {
+
+        @Override
+        public void onAvailable(@NonNull Network network) {}
+
+        @RequiresApi(api = Build.VERSION_CODES.Q)
+        @Override
+        public void onCapabilitiesChanged(
+            @NonNull Network network,
+            @NonNull NetworkCapabilities networkCapabilities
+        ) {
+            if (networkInfoCallback == null) {
+                return;
+            }
+            WifiInfo info = (WifiInfo) networkCapabilities.getTransportInfo();
+            if (info == null) {
+                Timber.w("received null wifi info from connectivity manager");
+                return;
+            }
+            try {
+                JSONObject result = getWifiInfoJson(info);
+                networkInfoCallback.success(result);
+            } catch (Exception e) {
+                String errorMessage = "failed to obtain wifi info: " + e.getMessage();
+                Timber.e(e, errorMessage);
+                networkInfoCallback.error(errorMessage);
+            }
+            networkInfoCallback = null;
+        }
+    };
 
     @Override
     protected void pluginInitialize() {
         super.pluginInitialize();
-        telephonyManager = (TelephonyManager) cordova.getActivity().getSystemService(Context.TELEPHONY_SERVICE);
+        Activity activity = cordova.getActivity();
+        telephonyManager = (TelephonyManager) activity.getSystemService(Context.TELEPHONY_SERVICE);
+        wifiManager = (WifiManager) activity.getApplicationContext().getSystemService(Context.WIFI_SERVICE);
+        connectivityManager = activity.getSystemService(ConnectivityManager.class);
     }
 
     @Override
@@ -71,6 +132,9 @@ public class SignalStrength extends CordovaPlugin {
             case ACTION_GET_CELL_INFO:
                 getCellInfo(callbackContext);
                 break;
+            case ACTION_GET_WIFI_INFO:
+                getWifiInfo(callbackContext);
+                break;
             default:
                 return false;
         }
@@ -78,7 +142,7 @@ public class SignalStrength extends CordovaPlugin {
     }
 
     /**
-     * // included for backward compatibility; will be removed in a future plugin version
+     * included for backward compatibility; will be removed in a future plugin version
      * @deprecated use getCellInfo() instead
      */
     private void getDbm(CallbackContext callbackContext) {
@@ -90,7 +154,21 @@ public class SignalStrength extends CordovaPlugin {
             try {
                 getCellInfoSync(callbackContext);
             } catch (JSONException e) {
-                Timber.e(e);
+                String errorMessage = "getCellInfo ERROR: " + e.getMessage();
+                callbackContext.error(errorMessage);
+                Timber.e(e, errorMessage);
+            }
+        });
+    }
+
+    private void getWifiInfo(CallbackContext callbackContext) {
+        cordova.getThreadPool().execute(() -> {
+            try {
+                getWifiInfoSync(callbackContext);
+            } catch (JSONException e) {
+                String errorMessage = "getWifiInfo ERROR: " + e.getMessage();
+                callbackContext.error(errorMessage);
+                Timber.e(e, errorMessage);
             }
         });
     }
@@ -172,6 +250,44 @@ public class SignalStrength extends CordovaPlugin {
         callbackContext.success(result);
     }
 
+    private void getWifiInfoSync(CallbackContext callbackContext) throws JSONException {
+        if (Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+            Timber.v("using connectivity manager to obtain wifi info");
+            if (networkInfoCallback != null) {
+                networkInfoCallback.error("request overwritten");
+            }
+            networkInfoCallback = callbackContext;
+            connectivityManager.requestNetwork(networkRequest, networkCallback);
+        } else {
+            Timber.v("using wifi manager to obtain wifi info");
+            WifiInfo info = wifiManager.getConnectionInfo();
+            JSONObject result = getWifiInfoJson(info);
+            callbackContext.success(result);
+        }
+    }
+
+    private JSONObject getWifiInfoJson(WifiInfo info) throws JSONException {
+        JSONObject result = new JSONObject();
+        int rssi = info.getRssi();
+
+        result.put(KEY_SSID, info.getSSID());
+        result.put(KEY_BSSID, info.getBSSID());
+        result.put(KEY_NETWORK_ID, info.getNetworkId());
+        result.put(KEY_RSSI, rssi);
+        result.put(KEY_LINK_SPEED_MBPS, info.getLinkSpeed());
+
+        if (Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+            result.put(KEY_LEVEL, wifiManager.calculateSignalLevel(rssi));
+            result.put(KEY_MAX_LEVEL, wifiManager.getMaxSignalLevel());
+            result.put(KEY_TX_LINK_SPEED_MBPS, info.getTxLinkSpeedMbps());
+            result.put(KEY_MAX_TX_LINK_SPEED_MBPS, info.getMaxSupportedTxLinkSpeedMbps());
+            result.put(KEY_RX_LINK_SPEED_MBPS, info.getRxLinkSpeedMbps());
+            result.put(KEY_MAX_RX_LINK_SPEED_MBPS, info.getMaxSupportedRxLinkSpeedMbps());
+        }
+
+        return result;
+    }
+
     private JSONObject getCellInfoJson(CellInfo info) throws JSONException {
         JSONObject result = new JSONObject();
         String cellType = CELL_TYPE_UNKNOWN;
@@ -237,7 +353,7 @@ public class SignalStrength extends CordovaPlugin {
             }
         }
 
-        Timber.d("getCellInfoJson() result = %s dbm(%s) level(%s) primary = %s", cellType, dbm, level, primary);
+        Timber.v("getCellInfoJson() result = %s dbm(%s) level(%s) primary = %s", cellType, dbm, level, primary);
 
         result.put(KEY_PRIMARY, primary);
         result.put(KEY_CELL_TYPE, cellType);
