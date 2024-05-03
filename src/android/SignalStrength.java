@@ -45,9 +45,8 @@ public class SignalStrength extends CordovaPlugin {
     private static final String KEY_LEVEL = "level";
     private static final String KEY_CELL_TYPE = "cellType";
     private static final String KEY_CELL_DATA_LOADED = "cellDataLoaded";
-    private static final String KEY_HAS_PRIMARY = "hasPrimary";
-    private static final String KEY_ALTERNATE_PRIMARY = "alternatePrimary";
-    private static final String KEY_SECONDARY = "secondary";
+    private static final String KEY_PRIMARY = "primary";
+    private static final String KEY_ALTERNATES = "alternates";
     private static final String KEY_CONNECTION_STATUS = "connectionStatus";
 
     private static final String CELL_TYPE_UNKNOWN = "UNKNOWN";
@@ -121,74 +120,61 @@ public class SignalStrength extends CordovaPlugin {
 
         Timber.v("getCellInfo() checking %s instances", infoList.size());
 
-        JSONObject result = null;
-        ArrayList<JSONObject> altPrimaryInfoList = new ArrayList<>();
-        ArrayList<JSONObject> secondaryInfoList = new ArrayList<>();
+        JSONObject primary = null;
+        ArrayList<JSONObject> alternates = new ArrayList<>();
 
         for (CellInfo info : infoList) {
             if (info == null || !info.isRegistered()) {
                 continue;
             }
 
-            if (Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
-                int status = info.getCellConnectionStatus();
-                switch (status) {
-                    case CellInfo.CONNECTION_PRIMARY_SERVING:
-                        if (result == null) {
-                            // keep the first "primary" we find as the root object
-                            result = getPrimaryCellInfoJson(info);
-                        } else {
-                            altPrimaryInfoList.add(getCellInfoJson(info));
-                        }
-                        break;
-                    case CellInfo.CONNECTION_SECONDARY_SERVING:
-                    case CellInfo.CONNECTION_NONE:
-                    case CellInfo.CONNECTION_UNKNOWN:
-                    default:
-                        secondaryInfoList.add(getCellInfoJson(info));
-                        break;
-                }
-            } else if (result == null) {
-                // keep the first "primary" we find as the root object
-                result = getPrimaryCellInfoJson(info);
+            JSONObject serializedInfo = getCellInfoJson(info);
+
+            if (primary == null && serializedInfo.optBoolean(KEY_PRIMARY)) {
+                primary = serializedInfo;
             } else {
-                secondaryInfoList.add(getCellInfoJson(info));
+                serializedInfo.remove(KEY_PRIMARY);
+                alternates.add(serializedInfo);
             }
         }
 
-        if (result == null) {
-            Timber.v("failed to find primary cell info, will attempt to find fallback");
-            if (!altPrimaryInfoList.isEmpty()) {
-                result = altPrimaryInfoList.get(0);
-            } else if (!secondaryInfoList.isEmpty()) {
-                result = secondaryInfoList.get(0);
-            } else {
-                result = new JSONObject();
-            }
-            result.put(KEY_HAS_PRIMARY, false);
+        JSONObject result;
+
+        if (primary != null) {
+            result = primary;
+        } else if (!alternates.isEmpty()) {
+            result = alternates.get(0);
+            result.put(KEY_PRIMARY, false);
+        } else {
+            result = new JSONObject();
+            result.put(KEY_PRIMARY, false);
         }
 
-        result.put(KEY_ALTERNATE_PRIMARY, altPrimaryInfoList);
-        result.put(KEY_SECONDARY, secondaryInfoList);
-
+        result.put(KEY_ALTERNATES, alternates);
         callbackContext.success(result);
-    }
-
-    private JSONObject getPrimaryCellInfoJson(CellInfo info) throws JSONException {
-        JSONObject result = getCellInfoJson(info);
-        result.put(KEY_HAS_PRIMARY, true);
-        return result;
     }
 
     private JSONObject getCellInfoJson(CellInfo info) throws JSONException {
         JSONObject result = new JSONObject();
         String cellType = CELL_TYPE_UNKNOWN;
+        boolean primary = false;
         boolean loaded = false;
+        int connectionStatus = 0;
         int dbm = 0;
         int level = 0;
 
         if (info != null) {
             cellType = info.getClass().getSimpleName();
+            boolean registered = info.isRegistered();
+            if (Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+                connectionStatus = info.getCellConnectionStatus();
+                primary = registered && (
+                    connectionStatus == CellInfo.CONNECTION_PRIMARY_SERVING
+                        || connectionStatus == CellInfo.CONNECTION_SECONDARY_SERVING
+                );
+            } else {
+                primary = registered;
+            }
         }
 
         // Unfortunately, we need to switch over these manually instead of
@@ -233,15 +219,14 @@ public class SignalStrength extends CordovaPlugin {
             }
         }
 
-        Timber.d("getCellInfoJson() result = %s dbm(%s) level(%s)", cellType, dbm, level);
+        Timber.d("getCellInfoJson() result = %s dbm(%s) level(%s) primary = %s", cellType, dbm, level, primary);
+
+        result.put(KEY_PRIMARY, primary);
         result.put(KEY_CELL_TYPE, cellType);
         result.put(KEY_DBM, dbm);
         result.put(KEY_LEVEL, level);
+        result.put(KEY_CONNECTION_STATUS, connectionStatus);
         result.put(KEY_CELL_DATA_LOADED, loaded);
-
-        if (info != null && Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
-            result.put(KEY_CONNECTION_STATUS, info.getCellConnectionStatus());
-        }
 
         return result;
     }

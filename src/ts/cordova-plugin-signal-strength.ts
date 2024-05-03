@@ -78,20 +78,15 @@ export interface CellInfo {
 
 export interface CellInfoWithAlternates extends CellInfo {
     /**
-     * True if at least one registered cell provider was found.
+     * Indicates whether a target "primary" instance was found.
+     * See `CellConnectionStatus.CONNECTION_PRIMARY_SERVING` for more info.
+     * DBM and level should ideally only be used from the primary (i.e. this object).
      */
-    hasPrimary: boolean;
-    /**
-     * Any CellInfo instances past the first found "primary"
-     * that also report themselves as primary (see CellConnectionStatus)
-     */
-    alternatePrimary: CellInfo[];
+    primary: boolean;
     /**
      * Any registered non-primary CellInfo instances.
-     * NOTE: although this is named "secondary", these instances
-     * may not have a "secondary serving" status.
      */
-    secondary: CellInfo[];
+    alternates: CellInfo[];
 }
 
 export class SignalStrengthCordovaInterface {
