@@ -36,6 +36,7 @@ import timber.log.Timber;
 
 public class SignalStrength extends CordovaPlugin {
     /**
+     * // included for backward compatibility; will be removed in a future plugin version
      * @deprecated use ACTION_GET_CELL_INFO instead
      */
     private static final String ACTION_DBM = "dbm";
@@ -63,7 +64,7 @@ public class SignalStrength extends CordovaPlugin {
     public boolean execute(String action, JSONArray args, CallbackContext callbackContext) throws JSONException {
         Timber.v("execute action %s", action);
         switch (action) {
-            // included for backward compatibility, but will be removed in a future plugin version
+            // included for backward compatibility; will be removed in a future plugin version
             case ACTION_DBM:
                 getDbm(callbackContext);
                 break;
@@ -77,6 +78,7 @@ public class SignalStrength extends CordovaPlugin {
     }
 
     /**
+     * // included for backward compatibility; will be removed in a future plugin version
      * @deprecated use getCellInfo() instead
      */
     private void getDbm(CallbackContext callbackContext) {
@@ -84,14 +86,11 @@ public class SignalStrength extends CordovaPlugin {
     }
 
     private void getCellInfo(CallbackContext callbackContext) {
-        cordova.getThreadPool().execute(new Runnable() {
-            @Override
-            public void run() {
-                try {
-                    getCellInfoSync(callbackContext);
-                } catch (JSONException e) {
-                    Timber.e(e);
-                }
+        cordova.getThreadPool().execute(() -> {
+            try {
+                getCellInfoSync(callbackContext);
+            } catch (JSONException e) {
+                Timber.e(e);
             }
         });
     }
@@ -138,13 +137,32 @@ public class SignalStrength extends CordovaPlugin {
             }
         }
 
+        // If we failed to find a proper primary, try to
+        // fall back to an alternate instance that has loaded data
+        if (primary == null && !alternates.isEmpty()) {
+            for (JSONObject alternate : alternates) {
+                if (alternate != null && alternate.optBoolean(KEY_CELL_DATA_LOADED)) {
+                    primary = alternate;
+                    break;
+                }
+            }
+            // Couldn't find an alternate with loaded data, fall back to
+            // first instance as a last-ditch effort
+            if (primary == null) {
+                primary = alternates.get(0);
+            }
+            // If we found a new primary, remove it from the alternates list to
+            // avoid creating a cyclic JSON object
+            if (primary != null) {
+                primary.put(KEY_PRIMARY, false);
+                alternates.remove(primary);
+            }
+        }
+
         JSONObject result;
 
         if (primary != null) {
             result = primary;
-        } else if (!alternates.isEmpty()) {
-            result = alternates.get(0);
-            result.put(KEY_PRIMARY, false);
         } else {
             result = new JSONObject();
             result.put(KEY_PRIMARY, false);
