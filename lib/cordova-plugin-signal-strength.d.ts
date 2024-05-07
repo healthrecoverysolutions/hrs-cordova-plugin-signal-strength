@@ -50,13 +50,32 @@ export interface WifiInfo {
     networkId: number;
     rssi: number;
     linkSpeedMbps: number;
-    level?: number;
-    maxLevel?: number;
+    level: number;
+    maxLevel: number;
     txLinkSpeedMbps?: number;
     maxTxLinkSpeedMbps?: number;
     rxLinkSpeedMbps?: number;
     maxRxLinkSpeedMbps?: number;
 }
+/**
+ * Provided for backwards compatibility - this will be removed in a future release.
+ * @deprecated use `SignalStrength.getCellInfo()` instead
+ */
+export declare function dbm(successCallback: SuccessCallback<CellInfoWithAlternates>, errorCallback: ErrorCallback): void;
+/**
+ * Given an rssi and a valid best -> worst rssi range,
+ * this will return a floating point value in range [0, 1].
+ *
+ * NOTE: lower rssi values will drop off logarithmically
+ * in an attempt to more closely match the behavior of dBm units.
+ */
+export declare function calculateSignalPercentage(rssi: number, bestRssi?: number, worstRssi?: number): number;
+/**
+ * Converts the given RSSI to a percentage, and then
+ * interpolates between the given min level and max level
+ * with that percentage.
+ */
+export declare function calculateSignalLevel(rssi: number, maxLevel?: number, minLevel?: number, bestRssi?: number, worstRssi?: number): number;
 export declare class SignalStrengthCordovaInterface {
     constructor();
     getCellInfo(): Promise<CellInfoWithAlternates>;
@@ -66,9 +85,4 @@ export declare class SignalStrengthCordovaInterface {
  * Singleton reference to interact with this cordova plugin
  */
 export declare const SignalStrength: SignalStrengthCordovaInterface;
-/**
- * Provided for backwards compatibility - this will be removed in a future release.
- * @deprecated use `SignalStrength.getCellInfo()` instead
- */
-export declare function dbm(successCallback: SuccessCallback<CellInfoWithAlternates>, errorCallback: ErrorCallback): void;
 export {};

@@ -4,5 +4,8 @@ export {
     CellConnectionStatus,
     CellInfo,
     CellInfoType,
-    CellInfoWithAlternates
+    CellInfoWithAlternates,
+    WifiInfo,
+    calculateSignalLevel,
+    calculateSignalPercentage
 } from './cordova-plugin-signal-strength';

@@ -95,33 +95,33 @@ export interface WifiInfo {
     networkId: number;
     rssi: number;
     linkSpeedMbps: number;
+    level: number;
+    maxLevel: number;
     // Below options only supported on Android 11 (API 30) and above
-    level?: number;
-    maxLevel?: number;
     txLinkSpeedMbps?: number;
     maxTxLinkSpeedMbps?: number;
     rxLinkSpeedMbps?: number;
     maxRxLinkSpeedMbps?: number;
 }
 
-export class SignalStrengthCordovaInterface {
+const DEFAULT_BEST_RSSI = -40;
+const DEFAULT_WORST_RSSI = -95;
+const DEFAULT_MAX_LEVEL = 4;
+const DEFAULT_MIN_LEVEL = 0;
 
-    constructor() {
-    }
-
-    public getCellInfo(): Promise<CellInfoWithAlternates> {
-        return invoke('getCellInfo');
-    }
-
-    public getWifiInfo(): Promise<WifiInfo> {
-        return invoke('getWifiInfo');
-    }
+function clamp(value: number, min: number, max: number): number {
+    return Math.min(Math.max(value, min), max);
 }
 
-/**
- * Singleton reference to interact with this cordova plugin
- */
-export const SignalStrength = new SignalStrengthCordovaInterface();
+function lerpUnclamped(a: number, b: number, t: number): number {
+    return a + (b - a) * t;
+}
+
+function lerp(a: number, b: number, t: number): number {
+    const low = Math.min(a, b);
+    const high = Math.max(a, b);
+    return clamp(lerpUnclamped(a, b, t), low, high);
+}
 
 /**
  * Provided for backwards compatibility - this will be removed in a future release.
@@ -130,3 +130,74 @@ export const SignalStrength = new SignalStrengthCordovaInterface();
 export function dbm(successCallback: SuccessCallback<CellInfoWithAlternates>, errorCallback: ErrorCallback): void {
     cordovaExec<CellInfoWithAlternates>(PLUGIN_NAME, 'dbm', successCallback, errorCallback, []);
 }
+
+/**
+ * Given an rssi and a valid best -> worst rssi range,
+ * this will return a floating point value in range [0, 1].
+ * 
+ * NOTE: lower rssi values will drop off logarithmically
+ * in an attempt to more closely match the behavior of dBm units.
+ */
+export function calculateSignalPercentage(
+    rssi: number, 
+    bestRssi: number = DEFAULT_BEST_RSSI, 
+    worstRssi: number = DEFAULT_WORST_RSSI
+): number {
+	if (rssi >= bestRssi) return 1;
+    if (bestRssi <= worstRssi || rssi <= worstRssi) return 0;
+
+    // variation of the formula the linux kernel uses:
+    // https://github.com/torvalds/linux/blob/9ff9b0d392ea08090cd1780fb196f36dbb586529/drivers/net/wireless/intel/ipw2x00/ipw2200.c#L4321
+    const range = (bestRssi - worstRssi);
+    const deviation = (bestRssi - rssi);
+    const scalar = range * range * 100;
+    const qualityLoss = deviation * (15 * range + 95 * deviation);
+    const percentage = (scalar - qualityLoss) / scalar;
+
+    return clamp(percentage, 0, 1);
+}
+
+/**
+ * Converts the given RSSI to a percentage, and then
+ * interpolates between the given min level and max level
+ * with that percentage.
+ */
+export function calculateSignalLevel(
+    rssi: number,
+    maxLevel: number = DEFAULT_MAX_LEVEL,
+    minLevel: number = DEFAULT_MIN_LEVEL, 
+    bestRssi: number = DEFAULT_BEST_RSSI, 
+    worstRssi: number = DEFAULT_WORST_RSSI
+): number {
+    const percentage = calculateSignalPercentage(rssi, bestRssi, worstRssi);
+    return Math.floor(lerp(minLevel, maxLevel, percentage));
+}
+
+function normalizeWifiInfo(info: WifiInfo): WifiInfo {
+    // If level / max level were not provided due to older android version (< API 30),
+    // attempt to calculate these values manually and shim them onto the response object.
+    if (info && (typeof info.level !== 'number' || typeof info.maxLevel !== 'number')) {
+        info.level = calculateSignalLevel(info.rssi);
+        info.maxLevel = DEFAULT_MAX_LEVEL;
+    }
+    return info;
+}
+
+export class SignalStrengthCordovaInterface {
+
+    constructor() {
+    }
+
+    public getCellInfo(): Promise<CellInfoWithAlternates> {
+        return invoke<CellInfoWithAlternates>('getCellInfo');
+    }
+
+    public getWifiInfo(): Promise<WifiInfo> {
+        return invoke<WifiInfo>('getWifiInfo').then(normalizeWifiInfo);
+    }
+}
+
+/**
+ * Singleton reference to interact with this cordova plugin
+ */
+export const SignalStrength = new SignalStrengthCordovaInterface();
