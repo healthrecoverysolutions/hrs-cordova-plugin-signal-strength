@@ -104,6 +104,11 @@ export interface WifiInfo {
     maxRxLinkSpeedMbps?: number;
 }
 
+export interface WifiInfoWithState {
+    connected: boolean;
+    info: WifiInfo;
+}
+
 const DEFAULT_BEST_RSSI = -40;
 const DEFAULT_WORST_RSSI = -95;
 const DEFAULT_MAX_LEVEL = 4;
@@ -183,6 +188,16 @@ function normalizeWifiInfo(info: WifiInfo): WifiInfo {
     return info;
 }
 
+export enum SignalStrengthEventType {
+    CELL_INFO_UPDATED = 'cellInfoUpdated',
+    WIFI_INTO_UPDATED = 'wifiInfoUpdated'
+}
+
+export interface SignalStrengthEvent {
+    type: SignalStrengthEventType;
+    data: CellInfoWithAlternates | WifiInfoWithState | any;
+}
+
 export class SignalStrengthCordovaInterface {
 
     constructor() {
@@ -194,6 +209,20 @@ export class SignalStrengthCordovaInterface {
 
     public getWifiInfo(): Promise<WifiInfo> {
         return invoke<WifiInfo>('getWifiInfo').then(normalizeWifiInfo);
+    }
+
+    public setSharedEventDelegate(success: SuccessCallback<SignalStrengthEvent>, error?: ErrorCallback): void {
+        const successWrapper: SuccessCallback<SignalStrengthEvent> = (ev) => {
+            if (ev.type === SignalStrengthEventType.WIFI_INTO_UPDATED && ev.data?.info) {
+                ev.data.info = normalizeWifiInfo(ev.data.info);
+            }
+            success(ev);
+        };
+        cordovaExec<SignalStrengthEvent>(PLUGIN_NAME, 'setSharedEventDelegate', successWrapper, error, []);
+    }
+
+    public removeSharedEventDelegate(): void {
+        cordovaExec<SignalStrengthEvent>(PLUGIN_NAME, 'setSharedEventDelegate', undefined, undefined, [true]);
     }
 }
 

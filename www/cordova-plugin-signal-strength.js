@@ -3,7 +3,7 @@
 // Generic Cordova Utilities
 ////////////////////////////////////////////////////////////////
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.SignalStrength = exports.SignalStrengthCordovaInterface = exports.calculateSignalLevel = exports.calculateSignalPercentage = exports.dbm = exports.CellConnectionStatus = exports.CellInfoType = void 0;
+exports.SignalStrength = exports.SignalStrengthCordovaInterface = exports.SignalStrengthEventType = exports.calculateSignalLevel = exports.calculateSignalPercentage = exports.dbm = exports.CellConnectionStatus = exports.CellInfoType = void 0;
 function noop() {
     return;
 }
@@ -129,6 +129,11 @@ function normalizeWifiInfo(info) {
     }
     return info;
 }
+var SignalStrengthEventType;
+(function (SignalStrengthEventType) {
+    SignalStrengthEventType["CELL_INFO_UPDATED"] = "cellInfoUpdated";
+    SignalStrengthEventType["WIFI_INTO_UPDATED"] = "wifiInfoUpdated";
+})(SignalStrengthEventType || (exports.SignalStrengthEventType = SignalStrengthEventType = {}));
 var SignalStrengthCordovaInterface = /** @class */ (function () {
     function SignalStrengthCordovaInterface() {
     }
@@ -137,6 +142,19 @@ var SignalStrengthCordovaInterface = /** @class */ (function () {
     };
     SignalStrengthCordovaInterface.prototype.getWifiInfo = function () {
         return invoke('getWifiInfo').then(normalizeWifiInfo);
+    };
+    SignalStrengthCordovaInterface.prototype.setSharedEventDelegate = function (success, error) {
+        var successWrapper = function (ev) {
+            var _a;
+            if (ev.type === SignalStrengthEventType.WIFI_INTO_UPDATED && ((_a = ev.data) === null || _a === void 0 ? void 0 : _a.info)) {
+                ev.data.info = normalizeWifiInfo(ev.data.info);
+            }
+            success(ev);
+        };
+        cordovaExec(PLUGIN_NAME, 'setSharedEventDelegate', successWrapper, error, []);
+    };
+    SignalStrengthCordovaInterface.prototype.removeSharedEventDelegate = function () {
+        cordovaExec(PLUGIN_NAME, 'setSharedEventDelegate', undefined, undefined, [true]);
     };
     return SignalStrengthCordovaInterface;
 }());
