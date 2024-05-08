@@ -72,7 +72,7 @@ export interface SignalStrengthEvent {
 }
 /**
  * Provided for backwards compatibility - this will be removed in a future release.
- * @deprecated use `SignalStrength.getCellInfo()` instead
+ * @deprecated use `SignalStrength.getCellState()` instead
  */
 export declare function dbm(successCallback: SuccessCallback<CellState>, errorCallback: ErrorCallback): void;
 /**
