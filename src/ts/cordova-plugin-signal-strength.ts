@@ -54,6 +54,11 @@ export enum CellInfoType {
     WCDMA = 'CellInfoWcdma'
 }
 
+export enum SignalStrengthEventType {
+    CELL_STATE_UPDATED = 'cellStateUpdated',
+    WIFI_STATE_UPDATED = 'wifiStateUpdated'
+}
+
 /**
  * Constants reported from CellInfo:
  * https://developer.android.com/reference/android/telephony/CellInfo#constants_1
@@ -76,7 +81,7 @@ export interface CellInfo {
     level: number;
 }
 
-export interface CellInfoWithAlternates extends CellInfo {
+export interface CellState extends CellInfo {
     /**
      * Indicates whether a target "primary" instance was found.
      * See `CellConnectionStatus.CONNECTION_PRIMARY_SERVING` for more info.
@@ -104,9 +109,15 @@ export interface WifiInfo {
     maxRxLinkSpeedMbps?: number;
 }
 
-export interface WifiInfoWithState {
+export interface WifiState {
+    enabled: boolean;
     connected: boolean;
     info: WifiInfo;
+}
+
+export interface SignalStrengthEvent {
+    type: SignalStrengthEventType;
+    data: CellState | WifiState | any;
 }
 
 const DEFAULT_BEST_RSSI = -40;
@@ -128,12 +139,25 @@ function lerp(a: number, b: number, t: number): number {
     return clamp(lerpUnclamped(a, b, t), low, high);
 }
 
+function normalizeWifiState(state: WifiState): WifiState {
+    if (state && state.info) {
+        // If level / max level were not provided due to older android version (< API 30),
+        // attempt to calculate these values manually and shim them onto the response object.
+        if (typeof state.info.level !== 'number' 
+            || typeof state.info.maxLevel !== 'number') {
+                state.info.level = calculateSignalLevel(state.info.rssi);
+                state.info.maxLevel = DEFAULT_MAX_LEVEL;
+        }
+    }
+    return state;
+}
+
 /**
  * Provided for backwards compatibility - this will be removed in a future release.
  * @deprecated use `SignalStrength.getCellInfo()` instead
  */
-export function dbm(successCallback: SuccessCallback<CellInfoWithAlternates>, errorCallback: ErrorCallback): void {
-    cordovaExec<CellInfoWithAlternates>(PLUGIN_NAME, 'dbm', successCallback, errorCallback, []);
+export function dbm(successCallback: SuccessCallback<CellState>, errorCallback: ErrorCallback): void {
+    cordovaExec<CellState>(PLUGIN_NAME, 'dbm', successCallback, errorCallback, []);
 }
 
 /**
@@ -178,43 +202,23 @@ export function calculateSignalLevel(
     return Math.floor(lerp(minLevel, maxLevel, percentage));
 }
 
-function normalizeWifiInfo(info: WifiInfo): WifiInfo {
-    // If level / max level were not provided due to older android version (< API 30),
-    // attempt to calculate these values manually and shim them onto the response object.
-    if (info && (typeof info.level !== 'number' || typeof info.maxLevel !== 'number')) {
-        info.level = calculateSignalLevel(info.rssi);
-        info.maxLevel = DEFAULT_MAX_LEVEL;
-    }
-    return info;
-}
-
-export enum SignalStrengthEventType {
-    CELL_INFO_UPDATED = 'cellInfoUpdated',
-    WIFI_INTO_UPDATED = 'wifiInfoUpdated'
-}
-
-export interface SignalStrengthEvent {
-    type: SignalStrengthEventType;
-    data: CellInfoWithAlternates | WifiInfoWithState | any;
-}
-
 export class SignalStrengthCordovaInterface {
 
     constructor() {
     }
 
-    public getCellInfo(): Promise<CellInfoWithAlternates> {
-        return invoke<CellInfoWithAlternates>('getCellInfo');
+    public getCellState(): Promise<CellState> {
+        return invoke<CellState>('getCellState');
     }
 
-    public getWifiInfo(): Promise<WifiInfo> {
-        return invoke<WifiInfo>('getWifiInfo').then(normalizeWifiInfo);
+    public getWifiState(): Promise<WifiState> {
+        return invoke<WifiState>('getWifiState').then(normalizeWifiState);
     }
 
     public setSharedEventDelegate(success: SuccessCallback<SignalStrengthEvent>, error?: ErrorCallback): void {
         const successWrapper: SuccessCallback<SignalStrengthEvent> = (ev) => {
-            if (ev.type === SignalStrengthEventType.WIFI_INTO_UPDATED && ev.data?.info) {
-                ev.data.info = normalizeWifiInfo(ev.data.info);
+            if (ev.type === SignalStrengthEventType.WIFI_STATE_UPDATED && ev.data) {
+                ev.data = normalizeWifiState(ev.data);
             }
             success(ev);
         };

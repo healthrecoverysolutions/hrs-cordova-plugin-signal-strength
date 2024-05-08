@@ -80,8 +80,8 @@ public class SignalStrength extends CordovaPlugin {
     private static final String KEY_CONNECTED = "connected";
     private static final String KEY_REASON = "reason";
 
-    private static final String EVENT_TYPE_CELL_INFO_UPDATED = "cellInfoUpdated";
-    private static final String EVENT_TYPE_WIFI_INFO_UPDATED = "wifiInfoUpdated";
+    private static final String EVENT_TYPE_CELL_STATE_UPDATED = "cellStateUpdated";
+    private static final String EVENT_TYPE_WIFI_STATE_UPDATED = "wifiStateUpdated";
     private static final String REASON_LOST_CONNECTION = "lostConnection";
     private static final String REASON_UNAVAILABLE = "unavailable";
     private static final String CELL_TYPE_UNKNOWN = "UNKNOWN";
@@ -274,7 +274,7 @@ public class SignalStrength extends CordovaPlugin {
 
     private void notifyCellInfoChanged(List<CellInfo> list) {
         try {
-            emitSharedJsEvent(EVENT_TYPE_CELL_INFO_UPDATED, getCellStatePayloadJson(list));
+            emitSharedJsEvent(EVENT_TYPE_CELL_STATE_UPDATED, getCellStatePayloadJson(list));
         } catch (JSONException e) {
             Timber.e(e, "failed to notify webview of cell info updates");
         }
@@ -296,7 +296,7 @@ public class SignalStrength extends CordovaPlugin {
         Timber.v("notifyWifiNetworkDisconnected reason=%s", reason);
         try {
             JSONObject result = getWifiStatePayloadJson(null).put(KEY_REASON, reason);
-            emitSharedJsEvent(EVENT_TYPE_WIFI_INFO_UPDATED, result);
+            emitSharedJsEvent(EVENT_TYPE_WIFI_STATE_UPDATED, result);
             if (networkInfoCallback != null) {
                 networkInfoCallback.success(result);
             }
@@ -319,7 +319,7 @@ public class SignalStrength extends CordovaPlugin {
         WifiInfo info = (WifiInfo) networkCapabilities.getTransportInfo();
         try {
             JSONObject result = getWifiStatePayloadJson(info);
-            emitSharedJsEvent(EVENT_TYPE_WIFI_INFO_UPDATED, result);
+            emitSharedJsEvent(EVENT_TYPE_WIFI_STATE_UPDATED, result);
             if (networkInfoCallback != null) {
                 networkInfoCallback.success(result);
             }

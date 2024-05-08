@@ -12,6 +12,10 @@ export declare enum CellInfoType {
     TDSCDMA = "CellInfoTdscdma",
     WCDMA = "CellInfoWcdma"
 }
+export declare enum SignalStrengthEventType {
+    CELL_STATE_UPDATED = "cellStateUpdated",
+    WIFI_STATE_UPDATED = "wifiStateUpdated"
+}
 /**
  * Constants reported from CellInfo:
  * https://developer.android.com/reference/android/telephony/CellInfo#constants_1
@@ -32,7 +36,7 @@ export interface CellInfo {
     dbm: number;
     level: number;
 }
-export interface CellInfoWithAlternates extends CellInfo {
+export interface CellState extends CellInfo {
     /**
      * Indicates whether a target "primary" instance was found.
      * See `CellConnectionStatus.CONNECTION_PRIMARY_SERVING` for more info.
@@ -57,15 +61,20 @@ export interface WifiInfo {
     rxLinkSpeedMbps?: number;
     maxRxLinkSpeedMbps?: number;
 }
-export interface WifiInfoWithState {
+export interface WifiState {
+    enabled: boolean;
     connected: boolean;
     info: WifiInfo;
+}
+export interface SignalStrengthEvent {
+    type: SignalStrengthEventType;
+    data: CellState | WifiState | any;
 }
 /**
  * Provided for backwards compatibility - this will be removed in a future release.
  * @deprecated use `SignalStrength.getCellInfo()` instead
  */
-export declare function dbm(successCallback: SuccessCallback<CellInfoWithAlternates>, errorCallback: ErrorCallback): void;
+export declare function dbm(successCallback: SuccessCallback<CellState>, errorCallback: ErrorCallback): void;
 /**
  * Given an rssi and a valid best -> worst rssi range,
  * this will return a floating point value in range [0, 1].
@@ -80,18 +89,10 @@ export declare function calculateSignalPercentage(rssi: number, bestRssi?: numbe
  * with that percentage.
  */
 export declare function calculateSignalLevel(rssi: number, maxLevel?: number, minLevel?: number, bestRssi?: number, worstRssi?: number): number;
-export declare enum SignalStrengthEventType {
-    CELL_INFO_UPDATED = "cellInfoUpdated",
-    WIFI_INTO_UPDATED = "wifiInfoUpdated"
-}
-export interface SignalStrengthEvent {
-    type: SignalStrengthEventType;
-    data: CellInfoWithAlternates | WifiInfoWithState | any;
-}
 export declare class SignalStrengthCordovaInterface {
     constructor();
-    getCellInfo(): Promise<CellInfoWithAlternates>;
-    getWifiInfo(): Promise<WifiInfo>;
+    getCellState(): Promise<CellState>;
+    getWifiState(): Promise<WifiState>;
     setSharedEventDelegate(success: SuccessCallback<SignalStrengthEvent>, error?: ErrorCallback): void;
     removeSharedEventDelegate(): void;
 }
