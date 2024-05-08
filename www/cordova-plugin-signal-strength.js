@@ -28,13 +28,10 @@ function cordovaExecPromise(plugin, method, args) {
 // Plugin Interface
 ////////////////////////////////////////////////////////////////
 var PLUGIN_NAME = 'SignalStrength';
-function invoke(method) {
-    var args = [];
-    for (var _i = 1; _i < arguments.length; _i++) {
-        args[_i - 1] = arguments[_i];
-    }
-    return cordovaExecPromise(PLUGIN_NAME, method, args);
-}
+var DEFAULT_BEST_RSSI = -40;
+var DEFAULT_WORST_RSSI = -95;
+var DEFAULT_MAX_LEVEL = 4;
+var DEFAULT_MIN_LEVEL = 0;
 /**
  * Translates to known subclasses of CellInfo:
  * https://developer.android.com/reference/android/telephony/CellInfo
@@ -64,10 +61,13 @@ var CellConnectionStatus;
     CellConnectionStatus[CellConnectionStatus["CONNECTION_SECONDARY_SERVING"] = 2] = "CONNECTION_SECONDARY_SERVING";
     CellConnectionStatus[CellConnectionStatus["CONNECTION_UNKNOWN"] = 2147483647] = "CONNECTION_UNKNOWN";
 })(CellConnectionStatus || (exports.CellConnectionStatus = CellConnectionStatus = {}));
-var DEFAULT_BEST_RSSI = -40;
-var DEFAULT_WORST_RSSI = -95;
-var DEFAULT_MAX_LEVEL = 4;
-var DEFAULT_MIN_LEVEL = 0;
+function invoke(method) {
+    var args = [];
+    for (var _i = 1; _i < arguments.length; _i++) {
+        args[_i - 1] = arguments[_i];
+    }
+    return cordovaExecPromise(PLUGIN_NAME, method, args);
+}
 function clamp(value, min, max) {
     return Math.min(Math.max(value, min), max);
 }
@@ -153,7 +153,7 @@ var SignalStrengthCordovaInterface = /** @class */ (function () {
             }
             success(ev);
         };
-        cordovaExec(PLUGIN_NAME, 'setSharedEventDelegate', successWrapper, error, []);
+        cordovaExec(PLUGIN_NAME, 'setSharedEventDelegate', successWrapper, error, [false]);
     };
     SignalStrengthCordovaInterface.prototype.removeSharedEventDelegate = function () {
         cordovaExec(PLUGIN_NAME, 'setSharedEventDelegate', undefined, undefined, [true]);

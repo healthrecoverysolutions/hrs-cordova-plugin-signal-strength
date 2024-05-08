@@ -36,10 +36,10 @@ function cordovaExecPromise<T>(plugin: string, method: string, args?: any[]): Pr
 ////////////////////////////////////////////////////////////////
 
 const PLUGIN_NAME = 'SignalStrength';
-
-function invoke<T>(method: string, ...args: any[]): Promise<T> {
-    return cordovaExecPromise<T>(PLUGIN_NAME, method, args);
-}
+const DEFAULT_BEST_RSSI = -40;
+const DEFAULT_WORST_RSSI = -95;
+const DEFAULT_MAX_LEVEL = 4;
+const DEFAULT_MIN_LEVEL = 0;
 
 /**
  * Translates to known subclasses of CellInfo:
@@ -120,10 +120,9 @@ export interface SignalStrengthEvent {
     data: CellState | WifiState | any;
 }
 
-const DEFAULT_BEST_RSSI = -40;
-const DEFAULT_WORST_RSSI = -95;
-const DEFAULT_MAX_LEVEL = 4;
-const DEFAULT_MIN_LEVEL = 0;
+function invoke<T>(method: string, ...args: any[]): Promise<T> {
+    return cordovaExecPromise<T>(PLUGIN_NAME, method, args);
+}
 
 function clamp(value: number, min: number, max: number): number {
     return Math.min(Math.max(value, min), max);
@@ -222,7 +221,7 @@ export class SignalStrengthCordovaInterface {
             }
             success(ev);
         };
-        cordovaExec<SignalStrengthEvent>(PLUGIN_NAME, 'setSharedEventDelegate', successWrapper, error, []);
+        cordovaExec<SignalStrengthEvent>(PLUGIN_NAME, 'setSharedEventDelegate', successWrapper, error, [false]);
     }
 
     public removeSharedEventDelegate(): void {

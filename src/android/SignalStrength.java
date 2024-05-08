@@ -274,7 +274,8 @@ public class SignalStrength extends CordovaPlugin {
 
     private void notifyCellInfoChanged(List<CellInfo> list) {
         try {
-            emitSharedJsEvent(EVENT_TYPE_CELL_STATE_UPDATED, getCellStatePayloadJson(list));
+            JSONObject data = getCellStatePayloadJson(list);
+            emitSharedJsEvent(EVENT_TYPE_CELL_STATE_UPDATED, data);
         } catch (JSONException e) {
             Timber.e(e, "failed to notify webview of cell info updates");
         }
@@ -295,11 +296,11 @@ public class SignalStrength extends CordovaPlugin {
     private void notifyWifiNetworkDisconnected(String reason) {
         Timber.v("notifyWifiNetworkDisconnected reason=%s", reason);
         try {
-            JSONObject result = getWifiStatePayloadJson(null).put(KEY_REASON, reason);
-            emitSharedJsEvent(EVENT_TYPE_WIFI_STATE_UPDATED, result);
+            JSONObject data = getWifiStatePayloadJson(null).put(KEY_REASON, reason);
             if (networkInfoCallback != null) {
-                networkInfoCallback.success(result);
+                networkInfoCallback.success(data);
             }
+            emitSharedJsEvent(EVENT_TYPE_WIFI_STATE_UPDATED, data);
         } catch (Exception e) {
             String errorMessage = "failed to obtain wifi info: " + e.getMessage();
             Timber.e(e, errorMessage);
@@ -318,11 +319,11 @@ public class SignalStrength extends CordovaPlugin {
         Timber.v("notifyWifiNetworkCapabilitiesChanged handle=%s", network.getNetworkHandle());
         WifiInfo info = (WifiInfo) networkCapabilities.getTransportInfo();
         try {
-            JSONObject result = getWifiStatePayloadJson(info);
-            emitSharedJsEvent(EVENT_TYPE_WIFI_STATE_UPDATED, result);
+            JSONObject data = getWifiStatePayloadJson(info);
             if (networkInfoCallback != null) {
-                networkInfoCallback.success(result);
+                networkInfoCallback.success(data);
             }
+            emitSharedJsEvent(EVENT_TYPE_WIFI_STATE_UPDATED, data);
         } catch (Exception e) {
             String errorMessage = "failed to obtain wifi info: " + e.getMessage();
             Timber.e(e, errorMessage);
@@ -349,7 +350,9 @@ public class SignalStrength extends CordovaPlugin {
         List<CellInfo> infoList = telephonyManager.getAllCellInfo();
 
         if (infoList != null) {
-            callbackContext.success(getCellStatePayloadJson(infoList));
+            JSONObject data = getCellStatePayloadJson(infoList);
+            callbackContext.success(data);
+            emitSharedJsEvent(EVENT_TYPE_CELL_STATE_UPDATED, data);
         } else {
             String errorMessage = "failed to get cell info list";
             Timber.w(errorMessage);
