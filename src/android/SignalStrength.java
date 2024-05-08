@@ -107,6 +107,7 @@ public class SignalStrength extends CordovaPlugin {
     private CallbackContext networkInfoCallback = null;
     private CallbackContext sharedJsEventCallback = null;
     private TelephonyCallback cellChangeCallback = null;
+    private boolean eventListenerCallbacksEnabled = false;
 
     private final PhoneStateListener legacyCellChangeCallback = new PhoneStateListener() {
         @Override
@@ -158,15 +159,12 @@ public class SignalStrength extends CordovaPlugin {
         telephonyManager = (TelephonyManager) activity.getSystemService(Context.TELEPHONY_SERVICE);
         wifiManager = (WifiManager) activity.getApplicationContext().getSystemService(Context.WIFI_SERVICE);
         connectivityManager = activity.getSystemService(ConnectivityManager.class);
-        registerTelephonyListener();
-        registerWifiListener();
     }
 
     @Override
     public void onDestroy() {
         super.onDestroy();
-        unregisterTelephonyListener();
-        unregisterWifiListener();
+        unregisterEventCallbackListeners();
     }
 
     @Override
@@ -227,9 +225,27 @@ public class SignalStrength extends CordovaPlugin {
 
     private void setSharedEventDelegate(CallbackContext callbackContext, boolean remove) {
         if (remove) {
+            unregisterEventCallbackListeners();
             sharedJsEventCallback = null;
         } else {
             sharedJsEventCallback = callbackContext;
+            registerEventCallbackListeners();
+        }
+    }
+
+    private void registerEventCallbackListeners() {
+        if (!eventListenerCallbacksEnabled) {
+            registerTelephonyListener();
+            registerWifiListener();
+            eventListenerCallbacksEnabled = true;
+        }
+    }
+
+    private void unregisterEventCallbackListeners() {
+        if (eventListenerCallbacksEnabled) {
+            unregisterTelephonyListener();
+            unregisterWifiListener();
+            eventListenerCallbacksEnabled = false;
         }
     }
 
@@ -492,7 +508,7 @@ public class SignalStrength extends CordovaPlugin {
             result.put(KEY_PRIMARY, false);
         }
 
-        result.put(KEY_ALTERNATES, alternates);
+        result.put(KEY_ALTERNATES, new JSONArray(alternates));
 
         return result;
     }
