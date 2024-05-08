@@ -75,8 +75,15 @@ public class SignalStrength extends CordovaPlugin {
     private static final String KEY_MAX_RX_LINK_SPEED_MBPS = "maxRxLinkSpeedMbps";
     private static final String KEY_TYPE = "type";
     private static final String KEY_DATA = "data";
+    private static final String KEY_INFO = "info";
+    private static final String KEY_ENABLED = "enabled";
+    private static final String KEY_CONNECTED = "connected";
+    private static final String KEY_REASON = "reason";
 
     private static final String EVENT_TYPE_CELL_INFO_UPDATED = "cellInfoUpdated";
+    private static final String EVENT_TYPE_WIFI_INFO_UPDATED = "wifiInfoUpdated";
+    private static final String REASON_LOST_CONNECTION = "lostConnection";
+    private static final String REASON_UNAVAILABLE = "unavailable";
     private static final String CELL_TYPE_UNKNOWN = "UNKNOWN";
 
     @RequiresApi(api = Build.VERSION_CODES.S)
@@ -121,7 +128,17 @@ public class SignalStrength extends CordovaPlugin {
 
         @Override
         public void onAvailable(@NonNull Network network) {
-            onWifiNetworkAvailable(network);
+            notifyWifiNetworkAvailable(network);
+        }
+
+        @Override
+        public void onUnavailable() {
+            notifyWifiNetworkUnavailable();
+        }
+
+        @Override
+        public void onLost(@NonNull Network network) {
+            notifyWifiNetworkLostConnection();
         }
 
         @RequiresApi(api = Build.VERSION_CODES.Q)
@@ -130,7 +147,7 @@ public class SignalStrength extends CordovaPlugin {
             @NonNull Network network,
             @NonNull NetworkCapabilities networkCapabilities
         ) {
-            onWifiNetworkCapabilitiesChanged(network, networkCapabilities);
+            notifyWifiNetworkCapabilitiesChanged(network, networkCapabilities);
         }
     };
 
@@ -167,89 +184,13 @@ public class SignalStrength extends CordovaPlugin {
                 getWifiInfo(callbackContext);
                 break;
             case ACTION_SET_SHARED_EVENT_DELEGATE:
-                setSharedEventDelegate(callbackContext, args.optBoolean(0));
+                boolean remove = args.optBoolean(0, false);
+                setSharedEventDelegate(callbackContext, remove);
                 break;
             default:
                 return false;
         }
         return true;
-    }
-
-    private void registerTelephonyListener() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            PluginTelephonyCallback callback = new PluginTelephonyCallback();
-            cellChangeCallback = new PluginTelephonyCallback();
-            telephonyManager.registerTelephonyCallback(cordova.getContext().getMainExecutor(), callback);
-        } else {
-            int flags = PhoneStateListener.LISTEN_CELL_INFO
-                | PhoneStateListener.LISTEN_SIGNAL_STRENGTHS;
-            telephonyManager.listen(legacyCellChangeCallback, flags);
-        }
-    }
-
-    private void unregisterTelephonyListener() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            telephonyManager.unregisterTelephonyCallback(cellChangeCallback);
-        } else {
-            telephonyManager.listen(legacyCellChangeCallback, PhoneStateListener.LISTEN_NONE);
-        }
-    }
-
-    private void registerWifiListener() {
-        // TODO: implement
-    }
-
-    private void unregisterWifiListener() {
-        // TODO: implement
-    }
-
-    private void notifyCellInfoRefresh() {
-        if (ActivityCompat.checkSelfPermission(
-            cordova.getContext(),
-            Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
-            notifyCellInfoChanged(telephonyManager.getAllCellInfo());
-        } else {
-            Timber.w("ACCESS_FINE_LOCATION permission not granted (from notifyCellInfoRefresh)");
-        }
-    }
-
-    private void notifyCellInfoChanged(List<CellInfo> list) {
-        if (list != null) {
-            try {
-                emitSharedJsEvent(EVENT_TYPE_CELL_INFO_UPDATED, getCellInfoListJson(list));
-            } catch (JSONException e) {
-                Timber.e(e, "failed to notify webview of cell info updates");
-            }
-        }
-    }
-
-    private void onWifiNetworkAvailable(@NonNull Network network) {
-        Timber.v("onWifiNetworkAvailable handle=%s", network.getNetworkHandle());
-    }
-
-    @RequiresApi(api = Build.VERSION_CODES.Q)
-    private void onWifiNetworkCapabilitiesChanged(
-        @NonNull Network network,
-        @NonNull NetworkCapabilities networkCapabilities
-    ) {
-        Timber.v("onWifiNetworkCapabilitiesChanged handle=%s", network.getNetworkHandle());
-        if (networkInfoCallback == null) {
-            return;
-        }
-        WifiInfo info = (WifiInfo) networkCapabilities.getTransportInfo();
-        if (info == null) {
-            Timber.w("received null wifi info from connectivity manager");
-            return;
-        }
-        try {
-            JSONObject result = getWifiInfoJson(info);
-            networkInfoCallback.success(result);
-        } catch (Exception e) {
-            String errorMessage = "failed to obtain wifi info: " + e.getMessage();
-            Timber.e(e, errorMessage);
-            networkInfoCallback.error(errorMessage);
-        }
-        networkInfoCallback = null;
     }
 
     /**
@@ -292,8 +233,108 @@ public class SignalStrength extends CordovaPlugin {
         }
     }
 
+    private void registerTelephonyListener() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            if (cellChangeCallback == null) {
+                cellChangeCallback = new PluginTelephonyCallback();
+            }
+            telephonyManager.registerTelephonyCallback(cordova.getContext().getMainExecutor(), cellChangeCallback);
+        } else {
+            int flags = PhoneStateListener.LISTEN_CELL_INFO
+                | PhoneStateListener.LISTEN_SIGNAL_STRENGTHS;
+            telephonyManager.listen(legacyCellChangeCallback, flags);
+        }
+    }
+
+    private void unregisterTelephonyListener() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            telephonyManager.unregisterTelephonyCallback(cellChangeCallback);
+        } else {
+            telephonyManager.listen(legacyCellChangeCallback, PhoneStateListener.LISTEN_NONE);
+        }
+    }
+
+    private void registerWifiListener() {
+        connectivityManager.registerNetworkCallback(networkRequest, networkCallback);
+    }
+
+    private void unregisterWifiListener() {
+        connectivityManager.unregisterNetworkCallback(networkCallback);
+    }
+
+    private void notifyCellInfoRefresh() {
+        if (ActivityCompat.checkSelfPermission(
+            cordova.getContext(),
+            Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+            notifyCellInfoChanged(telephonyManager.getAllCellInfo());
+        } else {
+            Timber.w("ACCESS_FINE_LOCATION permission not granted (from notifyCellInfoRefresh)");
+        }
+    }
+
+    private void notifyCellInfoChanged(List<CellInfo> list) {
+        try {
+            emitSharedJsEvent(EVENT_TYPE_CELL_INFO_UPDATED, getCellStatePayloadJson(list));
+        } catch (JSONException e) {
+            Timber.e(e, "failed to notify webview of cell info updates");
+        }
+    }
+
+    private void notifyWifiNetworkAvailable(@NonNull Network network) {
+        Timber.v("notifyWifiNetworkAvailable handle=%s", network.getNetworkHandle());
+    }
+
+    private void notifyWifiNetworkLostConnection() {
+        notifyWifiNetworkDisconnected(REASON_LOST_CONNECTION);
+    }
+
+    private void notifyWifiNetworkUnavailable() {
+        notifyWifiNetworkDisconnected(REASON_UNAVAILABLE);
+    }
+
+    private void notifyWifiNetworkDisconnected(String reason) {
+        Timber.v("notifyWifiNetworkDisconnected reason=%s", reason);
+        try {
+            JSONObject result = getWifiStatePayloadJson(null).put(KEY_REASON, reason);
+            emitSharedJsEvent(EVENT_TYPE_WIFI_INFO_UPDATED, result);
+            if (networkInfoCallback != null) {
+                networkInfoCallback.success(result);
+            }
+        } catch (Exception e) {
+            String errorMessage = "failed to obtain wifi info: " + e.getMessage();
+            Timber.e(e, errorMessage);
+            if (networkInfoCallback != null) {
+                networkInfoCallback.error(errorMessage);
+            }
+        }
+        networkInfoCallback = null;
+    }
+
+    @RequiresApi(api = Build.VERSION_CODES.Q)
+    private void notifyWifiNetworkCapabilitiesChanged(
+        @NonNull Network network,
+        @NonNull NetworkCapabilities networkCapabilities
+    ) {
+        Timber.v("notifyWifiNetworkCapabilitiesChanged handle=%s", network.getNetworkHandle());
+        WifiInfo info = (WifiInfo) networkCapabilities.getTransportInfo();
+        try {
+            JSONObject result = getWifiStatePayloadJson(info);
+            emitSharedJsEvent(EVENT_TYPE_WIFI_INFO_UPDATED, result);
+            if (networkInfoCallback != null) {
+                networkInfoCallback.success(result);
+            }
+        } catch (Exception e) {
+            String errorMessage = "failed to obtain wifi info: " + e.getMessage();
+            Timber.e(e, errorMessage);
+            if (networkInfoCallback != null) {
+                networkInfoCallback.error(errorMessage);
+            }
+        }
+        networkInfoCallback = null;
+    }
+
     private void getCellInfoSync(CallbackContext callbackContext) throws JSONException {
-        Timber.v("getCellInfo()");
+        Timber.v("getCellInfoSync()");
 
         if (ActivityCompat.checkSelfPermission(
             cordova.getContext(),
@@ -308,7 +349,7 @@ public class SignalStrength extends CordovaPlugin {
         List<CellInfo> infoList = telephonyManager.getAllCellInfo();
 
         if (infoList != null) {
-            callbackContext.success(getCellInfoListJson(infoList));
+            callbackContext.success(getCellStatePayloadJson(infoList));
         } else {
             String errorMessage = "failed to get cell info list";
             Timber.w(errorMessage);
@@ -327,7 +368,7 @@ public class SignalStrength extends CordovaPlugin {
         } else {
             Timber.v("using wifi manager to obtain wifi info");
             WifiInfo info = wifiManager.getConnectionInfo();
-            JSONObject result = getWifiInfoJson(info);
+            JSONObject result = getWifiStatePayloadJson(info);
             callbackContext.success(result);
         }
     }
@@ -345,6 +386,18 @@ public class SignalStrength extends CordovaPlugin {
             result.setKeepCallback(true);
             sharedJsEventCallback.sendPluginResult(result);
         }
+    }
+
+    private JSONObject getWifiStatePayloadJson(WifiInfo info) throws JSONException {
+        JSONObject result = new JSONObject();
+        result.put(KEY_ENABLED, wifiManager.isWifiEnabled());
+        result.put(KEY_CONNECTED, info != null);
+
+        if (info != null) {
+            result.put(KEY_INFO, getWifiInfoJson(info));
+        }
+
+        return result;
     }
 
     private JSONObject getWifiInfoJson(WifiInfo info) throws JSONException {
@@ -369,25 +422,29 @@ public class SignalStrength extends CordovaPlugin {
         return result;
     }
 
-    private JSONObject getCellInfoListJson(List<CellInfo> infoList) throws JSONException {
-        Timber.v("getCellInfo() checking %s instance(s)", infoList.size());
-
+    private JSONObject getCellStatePayloadJson(List<CellInfo> infoList) throws JSONException {
         JSONObject primary = null;
         ArrayList<JSONObject> alternates = new ArrayList<>();
 
-        for (CellInfo info : infoList) {
-            if (info == null || !info.isRegistered()) {
-                continue;
-            }
+        if (infoList != null) {
+            Timber.v("getCellStatePayloadJson() checking %s instance(s)", infoList.size());
+            for (CellInfo info : infoList) {
+                if (info == null || !info.isRegistered()) {
+                    continue;
+                }
 
-            JSONObject serializedInfo = getCellInfoJson(info);
+                JSONObject serializedInfo = getCellInfoJson(info);
 
-            if (primary == null && serializedInfo.optBoolean(KEY_PRIMARY)) {
-                primary = serializedInfo;
-            } else {
-                serializedInfo.remove(KEY_PRIMARY);
-                alternates.add(serializedInfo);
+                if (primary == null && serializedInfo.optBoolean(KEY_PRIMARY)) {
+                    primary = serializedInfo;
+                } else {
+                    serializedInfo.remove(KEY_PRIMARY);
+                    alternates.add(serializedInfo);
+                }
             }
+        } else {
+            // shouldn't ever happen... but just in case
+            Timber.w("getCellStatePayloadJson() received null list");
         }
 
         // If we failed to find a proper primary, try to
