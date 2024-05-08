@@ -361,6 +361,7 @@ public class SignalStrength extends CordovaPlugin {
     }
 
     private void getWifiStateSync(CallbackContext callbackContext) throws JSONException {
+        Timber.v("getWifiStateSync()");
         if (Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
             Timber.v("using connectivity manager to obtain wifi info");
             if (networkInfoCallback != null) {
@@ -393,19 +394,26 @@ public class SignalStrength extends CordovaPlugin {
 
     private JSONObject getWifiStatePayloadJson(WifiInfo info) throws JSONException {
         JSONObject result = new JSONObject();
-        result.put(KEY_ENABLED, wifiManager.isWifiEnabled());
-        result.put(KEY_CONNECTED, info != null);
+        boolean wifiEnabled = wifiManager.isWifiEnabled();
+        boolean hasWifiInfo = info != null;
 
-        if (info != null) {
+        result.put(KEY_ENABLED, wifiEnabled);
+        result.put(KEY_CONNECTED, hasWifiInfo);
+
+        if (hasWifiInfo) {
             result.put(KEY_INFO, getWifiInfoJson(info));
         }
+
+        Timber.v("getWifiStatePayloadJson() enabled = %s, has info = %s", wifiEnabled, hasWifiInfo);
 
         return result;
     }
 
     private JSONObject getWifiInfoJson(WifiInfo info) throws JSONException {
         JSONObject result = new JSONObject();
+        String ssid = info.getSSID();
         int rssi = info.getRssi();
+        boolean includeLevel = false;
 
         result.put(KEY_SSID, info.getSSID());
         result.put(KEY_BSSID, info.getBSSID());
@@ -414,6 +422,7 @@ public class SignalStrength extends CordovaPlugin {
         result.put(KEY_LINK_SPEED_MBPS, info.getLinkSpeed());
 
         if (Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+            includeLevel = true;
             result.put(KEY_LEVEL, wifiManager.calculateSignalLevel(rssi));
             result.put(KEY_MAX_LEVEL, wifiManager.getMaxSignalLevel());
             result.put(KEY_TX_LINK_SPEED_MBPS, info.getTxLinkSpeedMbps());
@@ -421,6 +430,8 @@ public class SignalStrength extends CordovaPlugin {
             result.put(KEY_RX_LINK_SPEED_MBPS, info.getRxLinkSpeedMbps());
             result.put(KEY_MAX_RX_LINK_SPEED_MBPS, info.getMaxSupportedRxLinkSpeedMbps());
         }
+
+        Timber.v("getWifiInfoJson() ssid = %s, rssi = %s = includeLevel = %s", ssid, rssi, includeLevel);
 
         return result;
     }
