@@ -49,11 +49,11 @@ import timber.log.Timber;
 public class SignalStrength extends CordovaPlugin {
     /**
      * included for backward compatibility; will be removed in a future plugin version
-     * @deprecated use ACTION_GET_CELL_INFO instead
+     * @deprecated use ACTION_GET_CELL_STATE instead
      */
     private static final String ACTION_DBM = "dbm";
-    private static final String ACTION_GET_CELL_INFO = "getCellInfo";
-    private static final String ACTION_GET_WIFI_INFO = "getWifiInfo";
+    private static final String ACTION_GET_CELL_STATE = "getCellState";
+    private static final String ACTION_GET_WIFI_STATE = "getWifiState";
     private static final String ACTION_SET_SHARED_EVENT_DELEGATE = "setSharedEventDelegate";
 
     private static final String KEY_DBM = "dbm";
@@ -177,11 +177,11 @@ public class SignalStrength extends CordovaPlugin {
             case ACTION_DBM:
                 getDbm(callbackContext);
                 break;
-            case ACTION_GET_CELL_INFO:
-                getCellInfo(callbackContext);
+            case ACTION_GET_CELL_STATE:
+                getCellState(callbackContext);
                 break;
-            case ACTION_GET_WIFI_INFO:
-                getWifiInfo(callbackContext);
+            case ACTION_GET_WIFI_STATE:
+                getWifiState(callbackContext);
                 break;
             case ACTION_SET_SHARED_EVENT_DELEGATE:
                 boolean remove = args.optBoolean(0, false);
@@ -195,30 +195,30 @@ public class SignalStrength extends CordovaPlugin {
 
     /**
      * included for backward compatibility; will be removed in a future plugin version
-     * @deprecated use getCellInfo() instead
+     * @deprecated use getCellState() instead
      */
     private void getDbm(CallbackContext callbackContext) {
-        getCellInfo(callbackContext);
+        getCellState(callbackContext);
     }
 
-    private void getCellInfo(CallbackContext callbackContext) {
+    private void getCellState(CallbackContext callbackContext) {
         cordova.getThreadPool().execute(() -> {
             try {
-                getCellInfoSync(callbackContext);
+                getCellStateSync(callbackContext);
             } catch (JSONException e) {
-                String errorMessage = "getCellInfo ERROR: " + e.getMessage();
+                String errorMessage = "getCellState ERROR: " + e.getMessage();
                 callbackContext.error(errorMessage);
                 Timber.e(e, errorMessage);
             }
         });
     }
 
-    private void getWifiInfo(CallbackContext callbackContext) {
+    private void getWifiState(CallbackContext callbackContext) {
         cordova.getThreadPool().execute(() -> {
             try {
-                getWifiInfoSync(callbackContext);
+                getWifiStateSync(callbackContext);
             } catch (JSONException e) {
-                String errorMessage = "getWifiInfo ERROR: " + e.getMessage();
+                String errorMessage = "getWifiState ERROR: " + e.getMessage();
                 callbackContext.error(errorMessage);
                 Timber.e(e, errorMessage);
             }
@@ -333,8 +333,8 @@ public class SignalStrength extends CordovaPlugin {
         networkInfoCallback = null;
     }
 
-    private void getCellInfoSync(CallbackContext callbackContext) throws JSONException {
-        Timber.v("getCellInfoSync()");
+    private void getCellStateSync(CallbackContext callbackContext) throws JSONException {
+        Timber.v("getCellStateSync()");
 
         if (ActivityCompat.checkSelfPermission(
             cordova.getContext(),
@@ -357,7 +357,7 @@ public class SignalStrength extends CordovaPlugin {
         }
     }
 
-    private void getWifiInfoSync(CallbackContext callbackContext) throws JSONException {
+    private void getWifiStateSync(CallbackContext callbackContext) throws JSONException {
         if (Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
             Timber.v("using connectivity manager to obtain wifi info");
             if (networkInfoCallback != null) {
