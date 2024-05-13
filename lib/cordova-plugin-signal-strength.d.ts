@@ -74,7 +74,7 @@ export interface SignalStrengthEvent {
  * Provided for backwards compatibility - this will be removed in a future release.
  * @deprecated use `SignalStrength.getCellState()` instead
  */
-export declare function dbm(successCallback: SuccessCallback<CellState>, errorCallback: ErrorCallback): void;
+export declare function dbm(successCallback: SuccessCallback<CellState>, errorCallback?: ErrorCallback): void;
 /**
  * Given an rssi and a valid best -> worst rssi range,
  * this will return a floating point value in range [0, 1].

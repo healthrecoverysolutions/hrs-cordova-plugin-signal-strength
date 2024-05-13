@@ -155,7 +155,13 @@ function normalizeWifiState(state: WifiState): WifiState {
  * Provided for backwards compatibility - this will be removed in a future release.
  * @deprecated use `SignalStrength.getCellState()` instead
  */
-export function dbm(successCallback: SuccessCallback<CellState>, errorCallback: ErrorCallback): void {
+export function dbm(successCallback: SuccessCallback<CellState>, errorCallback?: ErrorCallback): void {
+    if (typeof errorCallback !== 'function') {
+        // backward compatibility shim
+        errorCallback = () => {
+            successCallback({dbm: -1, level: 0} as any);
+        };
+    }
     cordovaExec<CellState>(PLUGIN_NAME, 'dbm', successCallback, errorCallback, []);
 }
 

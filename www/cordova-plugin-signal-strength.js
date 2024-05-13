@@ -96,6 +96,12 @@ function normalizeWifiState(state) {
  * @deprecated use `SignalStrength.getCellState()` instead
  */
 function dbm(successCallback, errorCallback) {
+    if (typeof errorCallback !== 'function') {
+        // backward compatibility shim
+        errorCallback = function () {
+            successCallback({ dbm: -1, level: 0 });
+        };
+    }
     cordovaExec(PLUGIN_NAME, 'dbm', successCallback, errorCallback, []);
 }
 exports.dbm = dbm;

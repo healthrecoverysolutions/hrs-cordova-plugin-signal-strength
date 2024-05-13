@@ -519,7 +519,7 @@ public class SignalStrength extends CordovaPlugin {
         boolean primary = false;
         boolean loaded = false;
         int connectionStatus = 0;
-        int dbm = 0;
+        int dbm = -1;
         int level = 0;
 
         if (info != null) {
