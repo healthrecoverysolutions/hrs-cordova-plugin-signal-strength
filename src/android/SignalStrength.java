@@ -12,6 +12,7 @@ import android.net.NetworkRequest;
 import android.net.wifi.WifiInfo;
 import android.net.wifi.WifiManager;
 import android.os.Build;
+import android.os.Handler;
 import android.telephony.CellInfoNr;
 import android.telephony.CellInfoTdscdma;
 import android.telephony.CellSignalStrength;
@@ -47,6 +48,10 @@ import java.util.List;
 import timber.log.Timber;
 
 public class SignalStrength extends CordovaPlugin {
+    // aliases to more easily parse version checking logic
+    private static final int ANDROID_12 = Build.VERSION_CODES.S;
+    private static final boolean IS_ANDROID_12_OR_GREATER = Build.VERSION.SDK_INT >= ANDROID_12;
+
     /**
      * included for backward compatibility; will be removed in a future plugin version
      * @deprecated use ACTION_GET_CELL_STATE instead
@@ -86,6 +91,16 @@ public class SignalStrength extends CordovaPlugin {
     private static final String REASON_UNAVAILABLE = "unavailable";
     private static final String CELL_TYPE_UNKNOWN = "UNKNOWN";
 
+    private TelephonyManager telephonyManager = null;
+    private WifiManager wifiManager = null;
+    private ConnectivityManager connectivityManager = null;
+    private final ArrayList<CallbackContext> networkInfoCallbacks = new ArrayList<>();
+    private CallbackContext sharedJsEventCallback = null;
+    private TelephonyCallback cellChangeCallback = null;
+    private Handler legacyWifiInfoPollHandler = null;
+    private Runnable legacyWifiInfoPollRunnable = null;
+    private boolean eventListenerCallbacksEnabled = false;
+
     @RequiresApi(api = Build.VERSION_CODES.S)
     private class PluginTelephonyCallback extends TelephonyCallback
         implements TelephonyCallback.CellInfoListener, TelephonyCallback.SignalStrengthsListener {
@@ -100,14 +115,6 @@ public class SignalStrength extends CordovaPlugin {
             notifyCellInfoRefresh();
         }
     }
-
-    private TelephonyManager telephonyManager = null;
-    private WifiManager wifiManager = null;
-    private ConnectivityManager connectivityManager = null;
-    private CallbackContext networkInfoCallback = null;
-    private CallbackContext sharedJsEventCallback = null;
-    private TelephonyCallback cellChangeCallback = null;
-    private boolean eventListenerCallbacksEnabled = false;
 
     private final PhoneStateListener legacyCellChangeCallback = new PhoneStateListener() {
         @Override
@@ -222,8 +229,13 @@ public class SignalStrength extends CordovaPlugin {
             }
         });
     }
-
     private void setSharedEventDelegate(CallbackContext callbackContext, boolean remove) {
+        cordova.getThreadPool().execute(() -> {
+            setSharedEventDelegateSync(callbackContext, remove);
+        });
+    }
+
+    private void setSharedEventDelegateSync(CallbackContext callbackContext, boolean remove) {
         if (remove) {
             unregisterEventCallbackListeners();
             sharedJsEventCallback = null;
@@ -250,7 +262,7 @@ public class SignalStrength extends CordovaPlugin {
     }
 
     private void registerTelephonyListener() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        if (IS_ANDROID_12_OR_GREATER) {
             if (cellChangeCallback == null) {
                 cellChangeCallback = new PluginTelephonyCallback();
             }
@@ -263,7 +275,7 @@ public class SignalStrength extends CordovaPlugin {
     }
 
     private void unregisterTelephonyListener() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        if (IS_ANDROID_12_OR_GREATER) {
             telephonyManager.unregisterTelephonyCallback(cellChangeCallback);
         } else {
             telephonyManager.listen(legacyCellChangeCallback, PhoneStateListener.LISTEN_NONE);
@@ -271,11 +283,39 @@ public class SignalStrength extends CordovaPlugin {
     }
 
     private void registerWifiListener() {
-        connectivityManager.registerNetworkCallback(networkRequest, networkCallback);
+        if (IS_ANDROID_12_OR_GREATER) {
+            connectivityManager.registerNetworkCallback(networkRequest, networkCallback);
+            connectivityManager.requestNetwork(networkRequest, networkCallback);
+            return;
+        }
+
+        if (legacyWifiInfoPollHandler == null) {
+            legacyWifiInfoPollHandler = new Handler();
+        }
+
+        if (legacyWifiInfoPollRunnable == null) {
+            legacyWifiInfoPollRunnable = () -> {
+                final long nextPollDelayMs = 10000;
+                pollLegacyWifiStateSync();
+                legacyWifiInfoPollHandler.postDelayed(legacyWifiInfoPollRunnable, nextPollDelayMs);
+            };
+        }
+
+        // Start polling legacy wifi info format.
+        // The first poll should be relatively quick so the shared callback gets fresh data
+        legacyWifiInfoPollHandler.postDelayed(legacyWifiInfoPollRunnable, 50);
     }
 
     private void unregisterWifiListener() {
-        connectivityManager.unregisterNetworkCallback(networkCallback);
+        if (IS_ANDROID_12_OR_GREATER) {
+            connectivityManager.unregisterNetworkCallback(networkCallback);
+            return;
+        }
+
+        // Stop polling legacy wifi info format.
+        if (legacyWifiInfoPollHandler != null) {
+            legacyWifiInfoPollHandler.removeCallbacks(legacyWifiInfoPollRunnable);
+        }
     }
 
     private void notifyCellInfoRefresh() {
@@ -313,18 +353,13 @@ public class SignalStrength extends CordovaPlugin {
         Timber.v("notifyWifiNetworkDisconnected reason=%s", reason);
         try {
             JSONObject data = getWifiStatePayloadJson(null).put(KEY_REASON, reason);
-            if (networkInfoCallback != null) {
-                networkInfoCallback.success(data);
-            }
+            notifyNetworkInfoSuccess(data);
             emitSharedJsEvent(EVENT_TYPE_WIFI_STATE_UPDATED, data);
         } catch (Exception e) {
             String errorMessage = "failed to obtain wifi info: " + e.getMessage();
             Timber.e(e, errorMessage);
-            if (networkInfoCallback != null) {
-                networkInfoCallback.error(errorMessage);
-            }
+            notifyNetworkInfoError(errorMessage);
         }
-        networkInfoCallback = null;
     }
 
     @RequiresApi(api = Build.VERSION_CODES.Q)
@@ -336,18 +371,13 @@ public class SignalStrength extends CordovaPlugin {
         WifiInfo info = (WifiInfo) networkCapabilities.getTransportInfo();
         try {
             JSONObject data = getWifiStatePayloadJson(info);
-            if (networkInfoCallback != null) {
-                networkInfoCallback.success(data);
-            }
+            notifyNetworkInfoSuccess(data);
             emitSharedJsEvent(EVENT_TYPE_WIFI_STATE_UPDATED, data);
         } catch (Exception e) {
             String errorMessage = "failed to obtain wifi info: " + e.getMessage();
             Timber.e(e, errorMessage);
-            if (networkInfoCallback != null) {
-                networkInfoCallback.error(errorMessage);
-            }
+            notifyNetworkInfoError(errorMessage);
         }
-        networkInfoCallback = null;
     }
 
     private void getCellStateSync(CallbackContext callbackContext) throws JSONException {
@@ -376,20 +406,67 @@ public class SignalStrength extends CordovaPlugin {
         }
     }
 
+    private void notifyNetworkInfoSuccess(JSONObject payload) {
+        if (networkInfoCallbacks.isEmpty()) {
+            Timber.w("notifyNetworkInfoSuccess() callback list is empty");
+            return;
+        }
+
+        for (CallbackContext cb : networkInfoCallbacks) {
+            if (cb != null) {
+                cb.success(payload);
+            }
+        }
+
+        networkInfoCallbacks.clear();
+    }
+
+    private void notifyNetworkInfoError(String errorMessage) {
+        if (networkInfoCallbacks.isEmpty()) {
+            Timber.w("notifyNetworkInfoError() callback list is empty");
+            return;
+        }
+
+        for (CallbackContext cb : networkInfoCallbacks) {
+            if (cb != null) {
+                cb.error(errorMessage);
+            }
+        }
+
+        networkInfoCallbacks.clear();
+    }
+
     private void getWifiStateSync(CallbackContext callbackContext) throws JSONException {
         Timber.v("getWifiStateSync()");
-        if (Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
-            Timber.v("using connectivity manager to obtain wifi info");
-            if (networkInfoCallback != null) {
-                networkInfoCallback.error("request overwritten");
-            }
-            networkInfoCallback = callbackContext;
-            connectivityManager.requestNetwork(networkRequest, networkCallback);
+        if (IS_ANDROID_12_OR_GREATER) {
+            requestStandardWifiStateSync(callbackContext);
         } else {
-            Timber.v("using wifi manager to obtain wifi info");
+            requestLegacyWifiStateSync(callbackContext);
+        }
+    }
+
+    private void requestStandardWifiStateSync(CallbackContext callbackContext) {
+        Timber.v("requestStandardWifiStateSync()");
+        networkInfoCallbacks.add(callbackContext);
+        connectivityManager.requestNetwork(networkRequest, networkCallback);
+    }
+
+    private void requestLegacyWifiStateSync(CallbackContext callbackContext) throws JSONException {
+        Timber.v("requestLegacyWifiStateSync()");
+        WifiInfo info = wifiManager.getConnectionInfo();
+        JSONObject result = getWifiStatePayloadJson(info);
+        callbackContext.success(result);
+        emitSharedJsEvent(EVENT_TYPE_WIFI_STATE_UPDATED, result);
+    }
+
+    private void pollLegacyWifiStateSync() {
+        Timber.v("pollLegacyWifiStateSync()");
+        try {
             WifiInfo info = wifiManager.getConnectionInfo();
             JSONObject result = getWifiStatePayloadJson(info);
-            callbackContext.success(result);
+            emitSharedJsEvent(EVENT_TYPE_WIFI_STATE_UPDATED, result);
+        } catch (Exception e) {
+            Timber.e(e, "pollLegacyWifiStateSync() failed!");
         }
     }
 
