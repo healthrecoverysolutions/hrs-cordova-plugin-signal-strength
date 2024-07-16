@@ -2,8 +2,11 @@ package com.hrs.signalstrength;
 
 import android.Manifest;
 import android.app.Activity;
+import android.content.BroadcastReceiver;
 import android.content.Context;
 
+import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.net.ConnectivityManager;
 import android.net.Network;
@@ -89,6 +92,7 @@ public class SignalStrength extends CordovaPlugin {
     private static final String EVENT_TYPE_WIFI_STATE_UPDATED = "wifiStateUpdated";
     private static final String REASON_LOST_CONNECTION = "lostConnection";
     private static final String REASON_UNAVAILABLE = "unavailable";
+    private static final String REASON_DISABLED = "disabled";
     private static final String CELL_TYPE_UNKNOWN = "UNKNOWN";
 
     private TelephonyManager telephonyManager = null;
@@ -99,6 +103,7 @@ public class SignalStrength extends CordovaPlugin {
     private TelephonyCallback cellChangeCallback = null;
     private Handler legacyWifiInfoPollHandler = null;
     private Runnable legacyWifiInfoPollRunnable = null;
+    private IntentFilter wifiStateChangedFilter = null;
     private boolean eventListenerCallbacksEnabled = false;
 
     @RequiresApi(api = Build.VERSION_CODES.S)
@@ -156,6 +161,18 @@ public class SignalStrength extends CordovaPlugin {
             @NonNull NetworkCapabilities networkCapabilities
         ) {
             notifyWifiNetworkCapabilitiesChanged(network, networkCapabilities);
+        }
+    };
+
+    private final BroadcastReceiver wifiStateChangedReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            if (WifiManager.NETWORK_STATE_CHANGED_ACTION.equals(intent.getAction())) {
+                Timber.v("SignalStrength wifiStateReceiver NETWORK_STATE_CHANGED_ACTION");
+                if (!wifiManager.isWifiEnabled()) {
+                    notifyWifiDisabled();
+                }
+            }
         }
     };
 
@@ -283,9 +300,21 @@ public class SignalStrength extends CordovaPlugin {
     }
 
     private void registerWifiListener() {
+        if (wifiStateChangedFilter == null) {
+            wifiStateChangedFilter = new IntentFilter();
+            wifiStateChangedFilter.addAction(WifiManager.NETWORK_STATE_CHANGED_ACTION);
+        }
+
+        cordova.getActivity().registerReceiver(wifiStateChangedReceiver, wifiStateChangedFilter);
+
         if (IS_ANDROID_12_OR_GREATER) {
             connectivityManager.registerNetworkCallback(networkRequest, networkCallback);
             connectivityManager.requestNetwork(networkRequest, networkCallback);
+
+            // if for whatever reason the registered network callback
+            if (!wifiManager.isWifiEnabled()) {
+                notifyWifiDisabled();
+            }
             return;
         }
 
@@ -307,6 +336,8 @@ public class SignalStrength extends CordovaPlugin {
     }
 
     private void unregisterWifiListener() {
+        cordova.getActivity().unregisterReceiver(wifiStateChangedReceiver);
+
         if (IS_ANDROID_12_OR_GREATER) {
             connectivityManager.unregisterNetworkCallback(networkCallback);
             return;
@@ -342,11 +373,18 @@ public class SignalStrength extends CordovaPlugin {
     }
 
     private void notifyWifiNetworkLostConnection() {
+        Timber.v("notifyWifiNetworkLostConnection()");
         notifyWifiNetworkDisconnected(REASON_LOST_CONNECTION);
     }
 
     private void notifyWifiNetworkUnavailable() {
+        Timber.v("notifyWifiNetworkUnavailable()");
         notifyWifiNetworkDisconnected(REASON_UNAVAILABLE);
+    }
+
+    private void notifyWifiDisabled() {
+        Timber.v("notifyWifiDisabled()");
+        notifyWifiNetworkDisconnected(REASON_DISABLED);
     }
 
     private void notifyWifiNetworkDisconnected(String reason) {
@@ -368,8 +406,8 @@ public class SignalStrength extends CordovaPlugin {
         @NonNull NetworkCapabilities networkCapabilities
     ) {
         Timber.v("notifyWifiNetworkCapabilitiesChanged handle=%s", network.getNetworkHandle());
-        WifiInfo info = (WifiInfo) networkCapabilities.getTransportInfo();
         try {
+            WifiInfo info = (WifiInfo) networkCapabilities.getTransportInfo();
             JSONObject data = getWifiStatePayloadJson(info);
             notifyNetworkInfoSuccess(data);
             emitSharedJsEvent(EVENT_TYPE_WIFI_STATE_UPDATED, data);
