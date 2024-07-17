@@ -319,7 +319,7 @@ public class SignalStrength extends CordovaPlugin {
         }
 
         if (legacyWifiInfoPollHandler == null) {
-            legacyWifiInfoPollHandler = new Handler();
+            legacyWifiInfoPollHandler = new Handler(cordova.getActivity().getMainLooper());
         }
 
         if (legacyWifiInfoPollRunnable == null) {
