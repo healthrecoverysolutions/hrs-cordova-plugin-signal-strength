@@ -78,6 +78,11 @@ export interface CellInfo {
      */
     cellDataLoaded: boolean;
     dbm: number;
+    /**
+     * A level in range [0, 4] (inclusive) indicating the quality of this connection.
+     * This value is retrieved directly from the native android CellSignalStrength API:
+     * https://developer.android.com/reference/android/telephony/CellSignalStrength#getLevel()
+     */
     level: number;
 }
 
