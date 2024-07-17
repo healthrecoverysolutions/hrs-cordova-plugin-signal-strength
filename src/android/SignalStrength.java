@@ -311,7 +311,8 @@ public class SignalStrength extends CordovaPlugin {
             connectivityManager.registerNetworkCallback(networkRequest, networkCallback);
             connectivityManager.requestNetwork(networkRequest, networkCallback);
 
-            // if for whatever reason the registered network callback
+            // registered network callback might not give us any initial info if
+            // the radio is off on startup, so manually check here for initialization purposes
             if (!wifiManager.isWifiEnabled()) {
                 notifyWifiDisabled();
             }
