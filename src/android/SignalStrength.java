@@ -246,6 +246,7 @@ public class SignalStrength extends CordovaPlugin {
             }
         });
     }
+
     private void setSharedEventDelegate(CallbackContext callbackContext, boolean remove) {
         cordova.getThreadPool().execute(() -> {
             setSharedEventDelegateSync(callbackContext, remove);
